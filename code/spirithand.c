@@ -158,13 +158,40 @@ vectorftogame(Camera cam, double x, double y)
 }
 
 SDL_Rect
-boxtocamspace(Camera cam, double x, double y, double w, double h)
+boxtoscreenspace(Camera cam, double x, double y, double w, double h)
 {
     SDL_Rect rectincam;
-    rectincam.x = (x - cam.x) / cam.w * cam.wres;
-    rectincam.y = (y - cam.y) / cam.h * cam.hres;
-    rectincam.w = w / cam.w * cam.wres;
-    rectincam.h = h / cam.h * cam.hres;
+    if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.w;
+        double yoffset = (cam.hres - (screentocamratio * cam.h)) / 2;
+        rectincam.y = (y - cam.y + cam.h / 2) * screentocamratio;
+        rectincam.y += yoffset;
+        rectincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+        rectincam.h = h * screentocamratio;
+        rectincam.w = w / cam.w * cam.wres;
+    }
+    else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.h;
+        double xoffset = (cam.wres - (screentocamratio * cam.w)) / 2;
+        rectincam.x = (x - cam.x + cam.w / 2) * screentocamratio;
+        rectincam.x += xoffset;
+        rectincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+        rectincam.w = w * screentocamratio;
+        rectincam.h = h / cam.h * cam.hres;
+    }
+    else
+    {
+        // is neither
+        rectincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+        rectincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+        rectincam.w = w / cam.w * cam.wres;
+        rectincam.h = h / cam.h * cam.hres;
+    }
+    //printf("%d, %d, %d, %d\n", rectincam.x, rectincam.y, rectincam.w, rectincam.h);
     return rectincam;
 }
 
@@ -190,8 +217,8 @@ makespirit(double x, double y, double size, SDL_Color color)
     Spirit newspirit;
     newspirit.x = x;
     newspirit.y = y;
-    newspirit.box.x = newspirit.x + size / 2.0;
-    newspirit.box.y = newspirit.y + size / 2.0;
+    newspirit.box.x = newspirit.x; - size / 2.0;
+    newspirit.box.y = newspirit.y; - size / 2.0;
     newspirit.box.w = size;
     newspirit.box.h = size;
     newspirit.color = color;
@@ -214,13 +241,19 @@ updatespirits()
 int
 debugrenderbox(Camera cam, Box box)
 {
-    SDL_Rect rect = boxtocamspace(cam, box.x, box.y, box.w, box.h);
+    SDL_Rect rect = boxtoscreenspace(cam, box.x, box.y, box.w, box.h);
+    /*
     SDL_SetRenderDrawColor(cam.renderer,
                            debug.collidercolor.r,
                            debug.collidercolor.g,
                            debug.collidercolor.b,
                            debug.collidercolor.a);
+                           */
     SDL_RenderDrawRect(cam.renderer, &rect);
+}
+
+int rendersidebars(Camera cam)
+{
 }
 
 int
@@ -228,6 +261,15 @@ render(Camera cam)
 {
     SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
     SDL_RenderClear(cam.renderer);
+        // draw background canvas (to make sure of the size)
+    SDL_Rect canvasrect = boxtoscreenspace(cam,
+                                        -cam.w / 2 + cam.x,
+                                        -cam.h / 2 + cam.y,
+                                        cam.w,
+                                        cam.h);
+    SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 255);
+    SDL_RenderFillRect(cam.renderer, &canvasrect);
+
     Spirit spirit;
     for(int i = 0; i < spiritcount; i++)
     {
@@ -235,14 +277,14 @@ render(Camera cam)
         if(debug.colliders)
         {
             SDL_SetRenderDrawColor(cam.renderer,
-                                   debug.collidercolor.r,
-                                   debug.collidercolor.g,
-                                   debug.collidercolor.b,
-                                   debug.collidercolor.a);
+                                   spirit.color.r,
+                                   spirit.color.g,
+                                   spirit.color.b,
+                                   spirit.color.a);
             debugrenderbox(cam, spirit.box);
         }
     }
-    SDL_RenderPresent(cam.renderer);
+    rendersidebars(cam);
     SDL_RenderPresent(cam.renderer);
 }
 
@@ -372,7 +414,7 @@ bool handleevent(SDL_Event *event)
                 {
                     SDL_Window *window = SDL_GetWindowFromID(event->window.windowID);
                     SDL_Renderer *renderer = SDL_GetRenderer(window);
-                    printf("SDL_WINDOWEVENT_RESIZED (%d, %d)\n", event->window.data1, event->window.data2);
+                    //printf("SDL_WINDOWEVENT_RESIZED (%d, %d)\n", event->window.data1, event->window.data2);
                     //SDLResizeTexture(&GlobalBackbuffer, Renderer, event->window.data1, event->window.data2);
                     maincam.wres = event->window.data1;
                     maincam.hres = event->window.data2;
@@ -418,8 +460,8 @@ int main()
     mousepos.y = maincam.y + maincam.h / 2;
 
     spiritcount = 0;
-    makespirit(0, 0, 20, color_orange);
-    makespirit(-30, -20, 26, color_blue);
+    makespirit(0, 0, 10, color_orange);
+    makespirit(-30, -20, 10, color_blue);
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -452,7 +494,7 @@ int main()
                 updatemovement();
                 updatespirits();
                 render(maincam);
-                sleep(0.015);
+                sleep(0.0166);
             }
         }
     }
