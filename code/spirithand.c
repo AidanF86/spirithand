@@ -254,6 +254,41 @@ debugrenderbox(Camera cam, Box box)
 
 int rendersidebars(Camera cam)
 {
+    SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
+    SDL_Rect bars[2];
+    if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.w;
+        double yoffset = (cam.hres - (screentocamratio * cam.h)) / 2;
+        double barheight = (cam.hres - (cam.h * screentocamratio)) / 2;
+        bars[0].x = 0;
+        bars[0].y = 0;
+        bars[0].w = cam.wres;
+        bars[0].h = barheight;
+        bars[1].x = 0;
+        bars[1].y = cam.hres - barheight;
+        bars[1].w = cam.wres;
+        bars[1].h = barheight;
+            // TODO(aidan): maybe change this to SDL_RenderFillRects for better performance
+    }
+    else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.h;
+        double xoffset = (cam.wres - (screentocamratio * cam.w)) / 2;
+        double barwidth = (cam.wres - (cam.w * screentocamratio)) / 2;
+        bars[0].x = 0;
+        bars[0].y = 0;
+        bars[0].w = barwidth;
+        bars[0].h = cam.hres;
+        bars[1].x = cam.wres - barwidth;
+        bars[1].y = 0;
+        bars[1].w = barwidth;
+        bars[1].h = cam.hres;
+            // TODO(aidan): maybe change this to SDL_RenderFillRects for better performance
+    }
+    SDL_RenderFillRects(cam.renderer, bars, 2);
 }
 
 int
