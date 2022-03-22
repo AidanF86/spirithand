@@ -8,17 +8,7 @@
 #define local_persist static
 #define global_variable static
 
-typedef struct
-Box {
-    double x; double y;
-    double w; double h;
-} Box;
-
-typedef struct
-circle {
-    double x; double y;
-    double radius;
-} circle;
+#include "colors.c"
 
 typedef struct
 Vectorf {
@@ -29,6 +19,20 @@ typedef struct
 Vectori {
     int x; int y;
 } Vectori;
+
+typedef struct
+Box {
+    double x; double y;
+    double w; double h;
+} Box;
+
+typedef struct
+Spirit {
+    double x; double y;
+    Vectorf vel;
+    Box box;
+    SDL_Color color;
+} Spirit;
 
 typedef struct
 Camera {
@@ -57,10 +61,11 @@ Keysdown {
 global_variable Debuginfo debug;
 global_variable Keysdown keysdown;
 global_variable Camera maincam;
-global_variable Vectori mousepos;
+global_variable Vectorf mousepos;
 
-global_variable Box testcollider;
-global_variable Box playercollider;
+#define MAXSPIRITS 54
+global_variable int spiritcount;
+global_variable Spirit spirits[MAXSPIRITS]; // idk 54 kinda sounds and feels right
 
 
     // amount should be between 0.0 and 1.0
@@ -83,10 +88,19 @@ boxescolliding(Box box1, Box box2)
        box1.x + box1.w > box2.x &&
        box1.y < box2.y + box2.h &&
        box1.h + box1.y > box2.y)
-    {
         return true;
-    }
     return false;
+}
+
+bool
+boxtotallyinbox(Box box1, Box box2)
+{
+    if(box1.x < box2.x ||
+       box1.x > box2.x + box2.w ||
+       box1.y < box2.y ||
+       box1.y > box2.y + box2.h)
+        return false;
+    return true;
 }
 
 Vectorf
@@ -144,7 +158,7 @@ vectorftogame(Camera cam, double x, double y)
 }
 
 SDL_Rect
-boxtocamera(Camera cam, double x, double y, double w, double h)
+boxtocamspace(Camera cam, double x, double y, double w, double h)
 {
     SDL_Rect rectincam;
     rectincam.x = (x - cam.x) / cam.w * cam.wres;
@@ -154,10 +168,53 @@ boxtocamera(Camera cam, double x, double y, double w, double h)
     return rectincam;
 }
 
-int
-debugrenderbox(Camera cam, double x, double y, double w, double h)
+    // converts the camera bounds to a Box
+Box
+camtobox(Camera cam)
 {
-    SDL_Rect rect = boxtocamera(cam, x, y, w, h);
+    Box box;
+    box.x = cam.x - cam.w / 2;
+    box.y = cam.y - cam.h / 2;
+    box.w = cam.w;
+    box.h = cam.h;
+}
+
+Spirit*
+makespirit(double x, double y, double size, SDL_Color color)
+{
+    if(spiritcount == MAXSPIRITS)
+    {
+        printf("makespirit: spiritcount is already at MAXSPIRITS!\n");
+        return NULL;
+    }
+    Spirit newspirit;
+    newspirit.x = x;
+    newspirit.y = y;
+    newspirit.box.x = newspirit.x + size / 2.0;
+    newspirit.box.y = newspirit.y + size / 2.0;
+    newspirit.box.w = size;
+    newspirit.box.h = size;
+    newspirit.color = color;
+    spirits[spiritcount] = newspirit;
+    return &(spirits[spiritcount++]);
+}
+
+int
+updatespirits()
+{
+    Spirit* spirit;
+    for(int i = 0; i < spiritcount; i++)
+    {
+        spirit = &(spirits[i]);
+        spirit->box.x = spirit->x - spirit->box.w / 2.0;
+        spirit->box.y = spirit->y - spirit->box.h / 2.0;
+    }
+}
+
+int
+debugrenderbox(Camera cam, Box box)
+{
+    SDL_Rect rect = boxtocamspace(cam, box.x, box.y, box.w, box.h);
     SDL_SetRenderDrawColor(cam.renderer,
                            debug.collidercolor.r,
                            debug.collidercolor.g,
@@ -171,26 +228,19 @@ render(Camera cam)
 {
     SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
     SDL_RenderClear(cam.renderer);
-    debugrenderbox(cam,
-                   testcollider.x,
-                   testcollider.y,
-                   testcollider.w,
-                   testcollider.h);
-    debugrenderbox(cam,
-                   playercollider.x,
-                   playercollider.y,
-                   playercollider.w,
-                   playercollider.h);
-    if(boxescolliding(testcollider.x,
-                      testcollider.y,
-                      testcollider.w,
-                      testcollider.h,
-                      playercollider.x,
-                      playercollider.y,
-                      playercollider.w,
-                      playercollider.h))
+    Spirit spirit;
+    for(int i = 0; i < spiritcount; i++)
     {
-        printf("Boxes colliding!\n");
+        spirit = spirits[i];
+        if(debug.colliders)
+        {
+            SDL_SetRenderDrawColor(cam.renderer,
+                                   debug.collidercolor.r,
+                                   debug.collidercolor.g,
+                                   debug.collidercolor.b,
+                                   debug.collidercolor.a);
+            debugrenderbox(cam, spirit.box);
+        }
     }
     SDL_RenderPresent(cam.renderer);
     SDL_RenderPresent(cam.renderer);
@@ -200,22 +250,27 @@ int
 updatemovement()
 {
     float speed = 0.01;
+    Vectorf camchange = {0};
     if(keysdown.up)
     {
-        maincam.y -= speed;
+        camchange.y -= speed;
     }
     if(keysdown.down)
     {
-        maincam.y += speed;
+        camchange.y += speed;
     }
     if(keysdown.left)
     {
-        maincam.x -= speed;
+        camchange.x -= speed;
     }
     if(keysdown.right)
     {
-        maincam.x += speed;
+        camchange.x += speed;
     }
+    maincam.x += camchange.x;
+    maincam.y += camchange.y;
+    mousepos.x += camchange.x;
+    mousepos.y += camchange.y;
 }
 
 
@@ -237,8 +292,6 @@ bool handleevent(SDL_Event *event)
                                                    event->motion.y);
             mousepos.x = mouseposingame.x;
             mousepos.y = mouseposingame.y;
-            playercollider.x = mousepos.x - playercollider.w / 2;
-            playercollider.y = mousepos.y - playercollider.h / 2;
                 // TODO(aidan): maybe change this to print floats (limit
                 // digits though)
         } break;
@@ -343,15 +396,16 @@ bool handleevent(SDL_Event *event)
     return(shouldquit);
 }
 
-
 int main()
 {
+    initcolors();
+
     debug.fps = 0;
     debug.collidercolor.r = 255;
     debug.collidercolor.g = 255;
     debug.collidercolor.b = 255;
     debug.collidercolor.a = 255;
-    debug.colliders = 0;
+    debug.colliders = 1;
 
     maincam.x = 0;
     maincam.y = 0;
@@ -363,16 +417,9 @@ int main()
     mousepos.x = maincam.x + maincam.w / 2;
     mousepos.y = maincam.y + maincam.h / 2;
 
-    testcollider.x = 30;
-    testcollider.y = 25;
-    testcollider.w = 20;
-    testcollider.h = 15;
-
-    playercollider.x = 50;
-    playercollider.y = 50;
-    playercollider.w = 10;
-    playercollider.h = 10;
-
+    spiritcount = 0;
+    makespirit(0, 0, 20, color_orange);
+    makespirit(-30, -20, 26, color_blue);
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -403,8 +450,9 @@ int main()
                     }
                 }
                 updatemovement();
+                updatespirits();
                 render(maincam);
-                sleep(0.01);
+                sleep(0.015);
             }
         }
     }
