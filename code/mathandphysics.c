@@ -1,0 +1,217 @@
+#include <stdbool.h>
+
+typedef struct
+Vectorf {
+    double x; double y;
+} Vectorf;
+
+typedef struct
+Vectori {
+    int x; int y;
+} Vectori;
+
+typedef struct
+Box {
+    double x; double y;
+    double w; double h;
+} Box;
+
+typedef struct
+Camera {
+    double x; double y;
+    double w; double h; // in game units
+    int wres; int hres;
+    //double zoom;
+    SDL_Renderer *renderer;
+} Camera;
+
+int randint(int min, int max)
+{
+    double randf = (double)(rand()) / (double)RAND_MAX;
+    return (max - min) * randf + min;
+}
+
+double randdouble(double min, double max)
+{
+    double randf = (double)(rand()) / (double)RAND_MAX;
+    return (max - min) * randf + min;
+}
+
+    // amount should be between 0.0 and 1.0
+double
+interpolatelinear(double amount, double a, double b)
+{
+    int result = amount;
+    result *= abs(a - b);
+    if(a > b)
+        result += b;
+    else
+        result += a;
+    return result;
+}
+
+bool
+boxescolliding(Box box1, Box box2)
+{
+    if(box1.x < box2.x + box2.w &&
+       box1.x + box1.w > box2.x &&
+       box1.y < box2.y + box2.h &&
+       box1.h + box1.y > box2.y)
+        return true;
+    return false;
+}
+
+bool
+boxtotallyinbox(Box box1, Box box2)
+{
+    if(box1.x < box2.x ||
+       box1.x > box2.x + box2.w ||
+       box1.y < box2.y ||
+       box1.y > box2.y + box2.h)
+        return false;
+    return true;
+}
+
+Vectorf
+boxdifference(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
+{
+    Vectorf diff;
+    diff.x = x1 + w1 - x2;
+    diff.x = y1 + h1 - y2;
+    return diff;
+}
+
+int
+pointinbox(double xpt, double ypt, double xbox, double ybox, double wbox, double hbox)
+{
+    if(xpt < xbox ||
+       xpt > xbox + wbox ||
+       ypt < ybox ||
+       ypt > ybox + hbox)
+        return 0;
+    return 1;
+}
+
+int
+boxandcirclecolliding(double x1, double y1, double radius, double x2, double y2, double w, double h)
+{
+        // get closest point to center of box
+    Vectorf boxcenter;
+    boxcenter.x = x2 + w / 2;
+    boxcenter.y = y2 + h / 2;
+
+    double angle = atan( fabs(boxcenter.x - x1) / fabs(boxcenter.y - y1) );
+
+    double pointx = sin(angle) / radius;
+    double pointy = cos(angle) / radius;
+
+    return pointinbox(pointx, pointy, x2, y2, w, h);
+}
+
+Vectori
+vectorftocamera(Camera cam, double x, double y)
+{
+    Vectori posincam;
+    posincam.x = (x - cam.x) / cam.w * cam.wres;
+    posincam.y = (y - cam.y) / cam.h * cam.hres;
+    return posincam;
+}
+
+Vectorf
+vectorftogame(Camera cam, double x, double y)
+{
+    Vectorf posingame;
+    posingame.x = x / cam.wres * cam.w + cam.x;
+    posingame.y = y / cam.hres * cam.h + cam.y;
+    return posingame;
+}
+
+SDL_Rect
+boxtoscreenspace(Camera cam, double x, double y, double w, double h)
+{
+    SDL_Rect rectincam;
+    if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.w;
+        double yoffset = (cam.hres - (screentocamratio * cam.h)) / 2;
+        rectincam.y = (y - cam.y + cam.h / 2) * screentocamratio;
+        rectincam.y += yoffset;
+        rectincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+        rectincam.h = h * screentocamratio;
+        rectincam.w = w / cam.w * cam.wres;
+    }
+    else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.h;
+        double xoffset = (cam.wres - (screentocamratio * cam.w)) / 2;
+        rectincam.x = (x - cam.x + cam.w / 2) * screentocamratio;
+        rectincam.x += xoffset;
+        rectincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+        rectincam.w = w * screentocamratio;
+        rectincam.h = h / cam.h * cam.hres;
+    }
+    else
+    {
+        // is neither
+        rectincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+        rectincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+        rectincam.w = w / cam.w * cam.wres;
+        rectincam.h = h / cam.h * cam.hres;
+    }
+    //printf("%d, %d, %d, %d\n", rectincam.x, rectincam.y, rectincam.w, rectincam.h);
+    return rectincam;
+}
+
+    // converts the camera bounds to a Box
+Box
+camtobox(Camera cam)
+{
+    Box box;
+    box.x = cam.x - cam.w / 2;
+    box.y = cam.y - cam.h / 2;
+    box.w = cam.w;
+    box.h = cam.h;
+    return box;
+}
+
+int rendersidebars(Camera cam)
+{
+    SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
+    SDL_Rect bars[2];
+    if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.w;
+        double yoffset = (cam.hres - (screentocamratio * cam.h)) / 2;
+        double barheight = (cam.hres - (cam.h * screentocamratio)) / 2;
+        bars[0].x = 0;
+        bars[0].y = 0;
+        bars[0].w = cam.wres;
+        bars[0].h = barheight;
+        bars[1].x = 0;
+        bars[1].y = cam.hres - barheight;
+        bars[1].w = cam.wres;
+        bars[1].h = barheight;
+            // TODO(aidan): maybe change this to SDL_RenderFillRects for better performance
+    }
+    else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.h;
+        double xoffset = (cam.wres - (screentocamratio * cam.w)) / 2;
+        double barwidth = (cam.wres - (cam.w * screentocamratio)) / 2;
+        bars[0].x = 0;
+        bars[0].y = 0;
+        bars[0].w = barwidth;
+        bars[0].h = cam.hres;
+        bars[1].x = cam.wres - barwidth;
+        bars[1].y = 0;
+        bars[1].w = barwidth;
+        bars[1].h = cam.hres;
+            // TODO(aidan): maybe change this to SDL_RenderFillRects for better performance
+    }
+    SDL_RenderFillRects(cam.renderer, bars, 2);
+}
+
