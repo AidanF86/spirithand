@@ -81,72 +81,46 @@ updatespirits()
         // do collision checking
         double potentialx = spirit->x + spirit->velx;
         double potentialy = spirit->y + spirit->vely;
-        if(!boxtotallyinbox(potentialx, potentialy, spirit->box.w, spirit->box.h,
-                            maincam.x, maincam.y, maincam.w, maincam.h))
+        if(!boxtotallyinbox(potentialx, newy, spirit.w, spirit.h,
+                            cam.x, cam.y, cam.w, cam.h))
         {
             double incpercent;
             double incx;
             double incy;
-            if(potentialx / maincam.x > potentialy / maincam.y)
+            if(potentialx / cam.x > potentialy / cam.y)
             {
                 // do horizontal
-                incx = maincam.x - spirit->x;
+                incx = cam.x - spirit->x;
                 incpercent = incx / spirit->velx;
                 incy = incpercent * spirit->vely;
                 spirit->x += incx;
                 spirit->y += incy;
                 Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                spirit->velx = newvel.x;
-                spirit->vely = newvel.y;
 
-                potentialx = spirit->x + spirit->velx * (1-incpercent);
-                potentialy = spirit->y + spirit->vely * (1-incpercent);
-
-                if(potentialy / maincam.y > potentialx / maincam.x)
+                if(potentialy / cam.y > potentialx / cam.x)
                 {
-                    // do vertical
-                    incy = maincam.y - spirit->y;
+                    // do horizontal
+                    incy = cam.y - spirit->y;
                     incpercent += incy / spirit->vely;
                     incx = incpercent * spirit->velx;
                     spirit->x += incx;
                     spirit->y += incy;
                     Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                    spirit->velx = newvel.x;
-                    spirit->vely = newvel.y;
                 }
                 spirit->x += (1-incpercent) * spirit->velx;
                 spirit->y += (1-incpercent) * spirit->vely;
             }
-            if(potentialy / maincam.y > potentialx / maincam.x)
-            {
-                // do vertical
-                incy = maincam.y - spirit->y;
-                incpercent += incy / spirit->vely;
-                incx = incpercent * spirit->velx;
-                spirit->x += incx;
-                spirit->y += incy;
-                Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                spirit->velx = newvel.x;
-                spirit->vely = newvel.y;
-
-                potentialx = spirit->x + spirit->velx * (1-incpercent);
-                potentialy = spirit->y + spirit->vely * (1-incpercent);
-
-                if(potentialx / maincam.x > potentialy / maincam.y)
+                if(potentialy / cam.y > potentialx / cam.x)
                 {
                     // do horizontal
-                    incx = maincam.x - spirit->x;
-                    incpercent = incx / spirit->velx;
-                    incy = incpercent * spirit->vely;
+                    incy = cam.y - spirit->y;
+                    incpercent += incy / spirit->vely;
+                    incx = incpercent * spirit->velx;
                     spirit->x += incx;
                     spirit->y += incy;
                     Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                    spirit->velx = newvel.x;
-                    spirit->vely = newvel.y;
                 }
                 spirit->x += (1-incpercent) * spirit->velx;
-                spirit->y += (1-incpercent) * spirit->vely;
-            }
         }
 
 

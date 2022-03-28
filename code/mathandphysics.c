@@ -37,6 +37,26 @@ double randdouble(double min, double max)
     return (max - min) * randf + min;
 }
 
+Vectorf
+bounce(double x, double y, bool vertical)
+{
+    double newx; double newy;
+    if(vertical)
+    {
+        newx = x;
+        newy = y*-1;
+    }
+    else
+    {
+        newx = x*-1;
+        newy = y;
+    }
+    Vectorf newvector;
+    newvector.x = newx;
+    newvector.y = newy;
+    return newvector;
+}
+
     // amount should be between 0.0 and 1.0
 double
 interpolatelinear(double amount, double a, double b)
@@ -51,23 +71,23 @@ interpolatelinear(double amount, double a, double b)
 }
 
 bool
-boxescolliding(Box box1, Box box2)
+boxescolliding(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
 {
-    if(box1.x < box2.x + box2.w &&
-       box1.x + box1.w > box2.x &&
-       box1.y < box2.y + box2.h &&
-       box1.h + box1.y > box2.y)
+    if(x1 < x2 + w2 &&
+       x1 + w1 > x2 &&
+       y1 < y2 + h2 &&
+       h1 + y1 > y2)
         return true;
     return false;
 }
 
 bool
-boxtotallyinbox(Box box1, Box box2)
+boxtotallyinbox(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
 {
-    if(box1.x < box2.x ||
-       box1.x > box2.x + box2.w ||
-       box1.y < box2.y ||
-       box1.y > box2.y + box2.h)
+    if(x1 < x2 ||
+       x1 + w1 > x2 + w2 ||
+       y1 < y2 ||
+       y1 + h1 > y2 + h2)
         return false;
     return true;
 }
@@ -109,25 +129,46 @@ boxandcirclecolliding(double x1, double y1, double radius, double x2, double y2,
 }
 
 Vectori
-vectorftocamera(Camera cam, double x, double y)
+vectorftoscreen(Camera cam, double x, double y)
 {
     Vectori posincam;
-    posincam.x = (x - cam.x) / cam.w * cam.wres;
-    posincam.y = (y - cam.y) / cam.h * cam.hres;
+    if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.w;
+        double yoffset = (cam.hres - (screentocamratio * cam.h)) / 2;
+        posincam.y = (y - cam.y + cam.h / 2) * screentocamratio;
+        posincam.y += yoffset;
+        posincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+    }
+    else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.h;
+        double xoffset = (cam.wres - (screentocamratio * cam.w)) / 2;
+        posincam.x = (x - cam.x + cam.w / 2) * screentocamratio;
+        posincam.x += xoffset;
+        posincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+    }
+    else
+    {
+        // is neither
+        posincam.x = (x - cam.x + cam.w / 2) / cam.w * cam.wres;
+        posincam.y = (y - cam.y + cam.h / 2) / cam.h * cam.hres;
+    }
     return posincam;
 }
 
 Vectorf
 vectorftogame(Camera cam, double x, double y)
 {
-    Vectorf posingame;
-    posingame.x = x / cam.wres * cam.w + cam.x;
-    posingame.y = y / cam.hres * cam.h + cam.y;
-    return posingame;
+    // TODO(aidan)
+    Vectorf posincam;
+    return posincam;
 }
 
 SDL_Rect
-boxtoscreenspace(Camera cam, double x, double y, double w, double h)
+boxtoscreen(Camera cam, double x, double y, double w, double h)
 {
     SDL_Rect rectincam;
     if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
