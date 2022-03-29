@@ -18,7 +18,7 @@ typedef struct
 Spirit {
     double x; double y;
     double velx; double vely;
-    Box box;
+    double size;
     SDL_Color color;
 } Spirit;
 
@@ -38,6 +38,8 @@ Keysdown {
     bool down;
     bool left;
     bool right;
+    bool z;
+    bool x;
 } Keysdown;
 
 global_variable Debuginfo debug;
@@ -45,10 +47,15 @@ global_variable Keysdown keysdown;
 global_variable Camera maincam;
 global_variable Vectorf mousepos;
 
-#define MAXSPIRITS 54 // idk 54 kinda sounds and feels right
+#define MAXSPIRITS 50 // idk 54 kinda sounds and feels right
 global_variable int spiritcount;
 global_variable Spirit spirits[MAXSPIRITS];
 
+#define MAXOBSTACLES 50
+global_variable int maxobstacles;
+global_variable Box obstacles[MAXOBSTACLES];
+
+Box bounds[4];
 
 Spirit*
 makespirit(double x, double y, double size, SDL_Color color)
@@ -61,10 +68,7 @@ makespirit(double x, double y, double size, SDL_Color color)
     Spirit newspirit;
     newspirit.x = x;
     newspirit.y = y;
-    newspirit.box.x = newspirit.x; - size / 2.0;
-    newspirit.box.y = newspirit.y; - size / 2.0;
-    newspirit.box.w = size;
-    newspirit.box.h = size;
+    newspirit.size = size;
     newspirit.color = color;
     spirits[spiritcount] = newspirit;
     return &(spirits[spiritcount++]);
@@ -77,88 +81,15 @@ updatespirits()
     for(int i = 0; i < spiritcount; i++)
     {
         spirit = &(spirits[i]);
-
-        // do collision checking
-        double potentialx = spirit->x + spirit->velx;
-        double potentialy = spirit->y + spirit->vely;
-        if(!boxtotallyinbox(potentialx, potentialy, spirit->box.w, spirit->box.h,
-                            maincam.x, maincam.y, maincam.w, maincam.h))
-        {
-            double incpercent;
-            double incx;
-            double incy;
-            if(potentialx / maincam.x > potentialy / maincam.y)
-            {
-                // do horizontal
-                incx = maincam.x - spirit->x;
-                incpercent = incx / spirit->velx;
-                incy = incpercent * spirit->vely;
-                spirit->x += incx;
-                spirit->y += incy;
-                Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                spirit->velx = newvel.x;
-                spirit->vely = newvel.y;
-
-                potentialx = spirit->x + spirit->velx * (1-incpercent);
-                potentialy = spirit->y + spirit->vely * (1-incpercent);
-
-                if(potentialy / maincam.y > potentialx / maincam.x)
-                {
-                    // do vertical
-                    incy = maincam.y - spirit->y;
-                    incpercent += incy / spirit->vely;
-                    incx = incpercent * spirit->velx;
-                    spirit->x += incx;
-                    spirit->y += incy;
-                    Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                    spirit->velx = newvel.x;
-                    spirit->vely = newvel.y;
-                }
-                spirit->x += (1-incpercent) * spirit->velx;
-                spirit->y += (1-incpercent) * spirit->vely;
-            }
-            if(potentialy / maincam.y > potentialx / maincam.x)
-            {
-                // do vertical
-                incy = maincam.y - spirit->y;
-                incpercent += incy / spirit->vely;
-                incx = incpercent * spirit->velx;
-                spirit->x += incx;
-                spirit->y += incy;
-                Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                spirit->velx = newvel.x;
-                spirit->vely = newvel.y;
-
-                potentialx = spirit->x + spirit->velx * (1-incpercent);
-                potentialy = spirit->y + spirit->vely * (1-incpercent);
-
-                if(potentialx / maincam.x > potentialy / maincam.y)
-                {
-                    // do horizontal
-                    incx = maincam.x - spirit->x;
-                    incpercent = incx / spirit->velx;
-                    incy = incpercent * spirit->vely;
-                    spirit->x += incx;
-                    spirit->y += incy;
-                    Vectorf newvel = bounce(spirit->velx, spirit->vely, false);
-                    spirit->velx = newvel.x;
-                    spirit->vely = newvel.y;
-                }
-                spirit->x += (1-incpercent) * spirit->velx;
-                spirit->y += (1-incpercent) * spirit->vely;
-            }
-        }
-
-
-        spirit->box.x = spirit->x - spirit->box.w / 2.0;
-        spirit->box.y = spirit->y - spirit->box.h / 2.0;
+        spirit->x += spirit->velx;
+        spirit->y += spirit->vely;
     }
 }
 
 int
-debugrenderbox(Camera cam, Box box)
+debugrenderbox(Camera cam, double x, double y, double w, double h)
 {
-    SDL_Rect rect = boxtoscreen(cam, box.x, box.y, box.w, box.h);
+    SDL_Rect rect = boxtoscreen(cam, x, y, w, h);
     /*
     SDL_SetRenderDrawColor(cam.renderer,
                            debug.collidercolor.r,
@@ -235,7 +166,14 @@ render(Camera cam)
                                    spirit.color.g,
                                    spirit.color.b,
                                    spirit.color.a);
-            debugrenderbox(cam, spirit.box);
+            debugrenderbox(cam,
+                           spirit.x - spirit.size / 2,
+                           spirit.y - spirit.size / 2,
+                           spirit.size,
+                           spirit.size
+                           );
+            SDL_SetRenderDrawColor(maincam.renderer, 255, 0, 0, 255);
+            debugrenderbox(maincam, -10, -10, 20, 20);
         }
     }
     rendersidebars(cam);
@@ -243,30 +181,44 @@ render(Camera cam)
 }
 
 int
-updatemovement()
+updateplayermovement()
 {
-    double speed = 0.1;
-    Vectorf camchange = {0};
+    double movespeed = 0.001;
+    double zoomspeed = 0.001;
+    Vectorf poschange = {0};
+    double zoomchange = 0;
     if(keysdown.up)
     {
-        camchange.y -= speed;
+        poschange.y -= movespeed;
     }
     if(keysdown.down)
     {
-        camchange.y += speed;
+        poschange.y += movespeed;
     }
     if(keysdown.left)
     {
-        camchange.x -= speed;
+        poschange.x -= movespeed;
     }
     if(keysdown.right)
     {
-        camchange.x += speed;
+        poschange.x += movespeed;
     }
-    maincam.x += camchange.x;
-    maincam.y += camchange.y;
-    mousepos.x += camchange.x;
-    mousepos.y += camchange.y;
+    if(keysdown.z)
+    {
+        zoomchange -= zoomspeed;
+    }
+    if(keysdown.x)
+    {
+        zoomchange += zoomspeed;
+    }
+        
+    maincam.w += zoomchange * maincam.w;
+    maincam.h += zoomchange * maincam.h;
+
+    maincam.x += poschange.x * maincam.w;
+    maincam.y += poschange.y * maincam.h;
+    mousepos.x += poschange.x;
+    mousepos.y += poschange.y;
 }
 
 
@@ -295,6 +247,19 @@ int main()
     maincam.h = 100;
     maincam.wres = 640;
     maincam.hres = 480;
+
+    bounds[0].x = maincam.x - maincam.w;
+    bounds[0].y = maincam.y;
+    bounds[0].w = maincam.w; bounds[1].h = maincam.h;
+    bounds[1].x = maincam.x;
+    bounds[1].y = maincam.y - maincam.h;
+    bounds[1].w = maincam.w; bounds[1].h = maincam.h;
+    bounds[2].x = maincam.x + maincam.w;
+    bounds[2].y = maincam.y;
+    bounds[2].w = maincam.w; bounds[1].h = maincam.h;
+    bounds[3].x = maincam.x;
+    bounds[3].y = maincam.y + maincam.h;
+    bounds[3].w = maincam.w; bounds[1].h = maincam.h;
 
     mousepos.x = maincam.x + maincam.w / 2;
     mousepos.y = maincam.y + maincam.h / 2;
@@ -345,7 +310,7 @@ int main()
                         running = false;
                     }
                 }
-                updatemovement();
+                updateplayermovement();
                 updatespirits();
                 render(maincam);
                 //sleep(0.0166);
@@ -398,6 +363,14 @@ bool handleevent(SDL_Event *event)
             {
                 keysdown.right = true;
             }
+            else if(keycode == SDLK_z)
+            {
+                keysdown.z = true;
+            }
+            else if(keycode == SDLK_x)
+            {
+                keysdown.x = true;
+            }
         } break;
         case SDL_KEYUP:
         {
@@ -443,6 +416,14 @@ bool handleevent(SDL_Event *event)
             else if(keycode == SDLK_RIGHT)
             {
                 keysdown.right = false;
+            }
+            else if(keycode == SDLK_z)
+            {
+                keysdown.z = false;
+            }
+            else if(keycode == SDLK_x)
+            {
+                keysdown.x = false;
             }
         } break;
 
