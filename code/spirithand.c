@@ -28,7 +28,7 @@ Debuginfo {
     SDL_Color collidercolor;
     int worldgrid;
     SDL_Color worldgridcolor;
-    double worldgridsize;
+    double worldgridgapsize;
     int fps;
 } Debuginfo;
 
@@ -100,24 +100,55 @@ debugrenderbox(Camera cam, double x, double y, double w, double h)
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
-int
-debugrenderworldgrid(Camera cam)
+int debugrenderworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
 {
-    double minx = cam.x - cam.w / 2.0 - fmod(cam.x - cam.w / 2.0, debug.worldgridsize);
-    double miny = cam.y - cam.h / 2.0 - fmod(cam.y - cam.h / 2.0, debug.worldgridsize);
-    double maxx = cam.x + cam.w / 2.0 + fmod(cam.x + cam.w / 2.0, debug.worldgridsize);
-    double maxy = cam.y + cam.h / 2.0 + fmod(cam.y + cam.h / 2.0, debug.worldgridsize);
-    minx -= debug.worldgridsize;
-    miny -= debug.worldgridsize;
-    maxx += debug.worldgridsize;
-    maxy += debug.worldgridsize;
+    if(reccount >= 7)
+    {
+        printf("debugrenderworldgrid: WTF\n");
+        return 1;
+    }
+
+    // find appropriate gap size
+    if(cam.w / gapsize > 8.0 || cam.h / gapsize > 8.0) 
+    {
+        //printf("Nested debugrendergrid: size=%f\n", gapsize);
+        debugrenderworldgrid(cam, gapsize * 2.0, color, reccount + 1);
+        return 0;
+    }
+    else if (cam.w / gapsize < 4.0 || cam.h / gapsize < 4.0) 
+    {
+        //printf("Nested debugrendergrid: size=%f\n", gapsize);
+        debugrenderworldgrid(cam, gapsize / 2.0, color, reccount + 1);
+        return 0;
+    }
+
+    // render sub-grid
+    SDL_Color subcolor = color;
+    subcolor.a /= 5;
+    debugrenderworldgridaux(cam, gapsize / 2.0, subcolor);
+
+    debugrenderworldgridaux(cam, gapsize, color);
+}
+
+int
+debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
+{
+
+    double minx = cam.x - cam.w / 2.0 - fmod(cam.x - cam.w / 2.0, gapsize);
+    double miny = cam.y - cam.h / 2.0 - fmod(cam.y - cam.h / 2.0, gapsize);
+    double maxx = cam.x + cam.w / 2.0 + fmod(cam.x + cam.w / 2.0, gapsize);
+    double maxy = cam.y + cam.h / 2.0 + fmod(cam.y + cam.h / 2.0, gapsize);
+    minx -= gapsize;
+    miny -= gapsize;
+    maxx += gapsize;
+    maxy += gapsize;
 
     SDL_SetRenderDrawColor(cam.renderer,
-                           debug.worldgridcolor.r,
-                           debug.worldgridcolor.g,
-                           debug.worldgridcolor.b,
-                           debug.worldgridcolor.a);
-    for(int x = minx; x <= maxx; x+= debug.worldgridsize)
+                           color.r,
+                           color.g,
+                           color.b,
+                           color.a);
+    for(int x = minx; x <= maxx; x+= gapsize)
     {
         Vectori minscreenpos = vectorftoscreen(cam, x, miny);
         Vectori maxscreenpos = vectorftoscreen(cam, x, maxy);
@@ -127,7 +158,7 @@ debugrenderworldgrid(Camera cam)
                            maxscreenpos.x,
                            maxscreenpos.y);
     }
-    for(int y = miny; y <= maxy; y+= debug.worldgridsize)
+    for(int y = miny; y <= maxy; y+= gapsize)
     {
         Vectori minscreenpos = vectorftoscreen(cam, minx, y);
         Vectori maxscreenpos = vectorftoscreen(cam, maxx, y);
@@ -153,7 +184,7 @@ render(Camera cam)
     SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 255);
     SDL_RenderFillRect(cam.renderer, &canvasrect);
 
-    debugrenderworldgrid(cam);
+    debugrenderworldgrid(cam, debug.worldgridgapsize, debug.worldgridcolor, 0);
 
     Spirit spirit;
     for(int i = 0; i < spiritcount; i++)
@@ -184,7 +215,7 @@ int
 updateplayermovement()
 {
     double movespeed = 0.001;
-    double zoomspeed = 0.001;
+    double zoomspeed = 0.002;
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
@@ -214,6 +245,24 @@ updateplayermovement()
         
     maincam.w += zoomchange * maincam.w;
     maincam.h += zoomchange * maincam.h;
+    if(maincam.w < maincam.minw)
+    {
+        maincam.w = maincam.minw;
+    }
+    else if(maincam.w > maincam.maxw)
+    {
+        maincam.w = maincam.maxw;
+    }
+    if(maincam.h < maincam.minh)
+    {
+        maincam.h = maincam.minh;
+    }
+    else if(maincam.h > maincam.maxh)
+    {
+        maincam.h = maincam.maxh;
+    }
+    printf("maincam.w=%f\n", maincam.w);
+    printf("maincam.h=%f\n", maincam.h);
 
     maincam.x += poschange.x * maincam.w;
     maincam.y += poschange.y * maincam.h;
@@ -239,12 +288,17 @@ int main()
     debug.worldgridcolor.g = 0;
     debug.worldgridcolor.b = 0;
     debug.worldgridcolor.a = 255;
-    debug.worldgridsize = 20;
+    debug.worldgridgapsize = 20;
 
     maincam.x = 0;
     maincam.y = 0;
     maincam.w = 100;
     maincam.h = 100;
+    maincam.minw = 40;
+    maincam.minh = 40; // TODO(aidan): find out why values below 40
+                       // cause world grid rendering bugs
+    maincam.maxw = maincam.w * 50.0;
+    maincam.maxh = maincam.h * 50.0;
     maincam.wres = 640;
     maincam.hres = 480;
 
@@ -295,6 +349,7 @@ int main()
         SDL_Renderer *renderer = SDL_CreateRenderer(window,
                                                    -1,
                                                    0);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         if(renderer)
         {
             maincam.renderer = renderer;

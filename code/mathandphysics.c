@@ -20,6 +20,8 @@ typedef struct
 Camera {
     double x; double y;
     double w; double h; // in game units
+    double minw; double minh;
+    double maxw; double maxh;
     int wres; int hres;
     //double zoom;
     SDL_Renderer *renderer;
@@ -35,6 +37,16 @@ double randdouble(double min, double max)
 {
     double randf = (double)(rand()) / (double)RAND_MAX;
     return (max - min) * randf + min;
+}
+
+double gohalfwayf(double orig, double goal)
+{
+    return orig + (goal - orig) / 2.0;
+}
+
+int gohalfwayi(int orig, int goal)
+{
+    return orig + (goal - orig) / 2.0;
 }
 
 Vectorf
