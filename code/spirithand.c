@@ -100,36 +100,6 @@ debugrenderbox(Camera cam, double x, double y, double w, double h)
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
-int debugrenderworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
-{
-    if(reccount >= 7)
-    {
-        printf("debugrenderworldgrid: WTF\n");
-        return 1;
-    }
-
-    // find appropriate gap size
-    if(cam.w / gapsize > 8.0 || cam.h / gapsize > 8.0) 
-    {
-        //printf("Nested debugrendergrid: size=%f\n", gapsize);
-        debugrenderworldgrid(cam, gapsize * 2.0, color, reccount + 1);
-        return 0;
-    }
-    else if (cam.w / gapsize < 4.0 || cam.h / gapsize < 4.0) 
-    {
-        //printf("Nested debugrendergrid: size=%f\n", gapsize);
-        debugrenderworldgrid(cam, gapsize / 2.0, color, reccount + 1);
-        return 0;
-    }
-
-    // render sub-grid
-    SDL_Color subcolor = color;
-    subcolor.a /= 5;
-    debugrenderworldgridaux(cam, gapsize / 2.0, subcolor);
-
-    debugrenderworldgridaux(cam, gapsize, color);
-}
-
 int
 debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
 {
@@ -168,6 +138,40 @@ debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
                            maxscreenpos.x,
                            maxscreenpos.y);
     }
+}
+
+int debugrenderworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
+{
+    if(reccount >= 7)
+    {
+        printf("debugrenderworldgrid: WTF\n");
+        return 1;
+    }
+
+    // find appropriate gap size
+    if(cam.w / gapsize > 8.0 || cam.h / gapsize > 8.0) 
+    {
+        //printf("Nested debugrendergrid: size=%f\n", gapsize);
+        debugrenderworldgrid(cam, gapsize * 2.0, color, reccount + 1);
+        return 0;
+    }
+    else if (cam.w / gapsize < 4.0 || cam.h / gapsize < 4.0) 
+    {
+        //printf("Nested debugrendergrid: size=%f\n", gapsize);
+        debugrenderworldgrid(cam, gapsize / 2.0, color, reccount + 1);
+        return 0;
+    }
+
+    double subalpha = ((cam.w / gapsize) - 4.0) / 4.0;
+    subalpha = (1.0 - subalpha) * 255;
+
+    // render sub-grid
+    SDL_Color subcolor = color;
+    //subcolor.a /= 5;
+    subcolor.a = subalpha;
+    debugrenderworldgridaux(cam, gapsize / 2.0, subcolor);
+
+    debugrenderworldgridaux(cam, gapsize, color);
 }
 
 int
@@ -261,8 +265,8 @@ updateplayermovement()
     {
         maincam.h = maincam.maxh;
     }
-    printf("maincam.w=%f\n", maincam.w);
-    printf("maincam.h=%f\n", maincam.h);
+    //printf("maincam.w=%f\n", maincam.w);
+    //printf("maincam.h=%f\n", maincam.h);
 
     maincam.x += poschange.x * maincam.w;
     maincam.y += poschange.y * maincam.h;
