@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -24,9 +25,9 @@ Spirit {
 
 typedef struct
 Debuginfo {
-    int colliders;
+    bool colliders;
     SDL_Color collidercolor;
-    int worldgrid;
+    bool worldgrid;
     SDL_Color worldgridcolor;
     double worldgridgapsize;
     int fps;
@@ -42,10 +43,25 @@ Keysdown {
     bool x;
 } Keysdown;
 
+typedef struct
+ButtonDocker {
+    int x;
+    int y;
+    int totaloffset;
+    bool vertical;
+} ButtonDocker;
+
+int mousex;
+int mousey;
+bool mouseleftdown;
+bool mouseleftup;
+
 global_variable Debuginfo debug;
 global_variable Keysdown keysdown;
 global_variable Camera maincam;
-global_variable Vectorf mousepos;
+
+TTF_Font *debugfont;
+#define FONTASPECTRATIO 0.5
 
 #define MAXSPIRITS 50 // idk 54 kinda sounds and feels right
 global_variable int spiritcount;
@@ -86,22 +102,117 @@ updatespirits()
     }
 }
 
-int
-debugrenderbox(Camera cam, double x, double y, double w, double h)
+void
+loadfonts()
 {
-    SDL_Rect rect = boxtoscreen(cam, x, y, w, h);
-    /*
-    SDL_SetRenderDrawColor(cam.renderer,
-                           debug.collidercolor.r,
-                           debug.collidercolor.g,
-                           debug.collidercolor.b,
-                           debug.collidercolor.a);
-                           */
+    TTF_Init();
+    debugfont = TTF_OpenFont("resources/fonts/JetBrainsMono-Medium.ttf", 20);
+    if(debugfont == NULL)
+        printf("Font could not be loaded!\n");
+}
+
+    // returns the size
+int
+drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui)
+{
+    int textlength = strlen(text);
+    SDL_Color color;
+    SDL_GetRenderDrawColor(cam.renderer, &(color.r), &(color.g), &(color.b), &(color.a));
+
+    for(int i = 0; i < textlength; i++) {
+        SDL_Rect rect;
+        rect.x = x + (i * (h * FONTASPECTRATIO) ); // TODO(aidan): add spacing
+        rect.y = y;
+        rect.w = (h * FONTASPECTRATIO);
+        rect.h = h;
+        //if(ui)
+        //    rect = boxuitoscreen(cam, rect.x, rect.y, rect.w, rect.h);
+        //else
+        //    rect = boxgametoscreen(cam, rect.x, rect.y, rect.w, rect.h);
+
+        // TODO(aidan): definitely inefficient, should use glyph caching
+        SDL_Surface *glyphcache = TTF_RenderGlyph_Solid(font, text[i], color);
+        SDL_Texture *glyph = SDL_CreateTextureFromSurface(cam.renderer, glyphcache);
+        SDL_RenderCopy(cam.renderer, glyph, NULL, &rect);
+        SDL_FreeSurface(glyphcache);
+        SDL_DestroyTexture(glyph);
+    }
+}
+
+bool
+drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
+{
+    bool beinghovered = false;
+    bool beingheld = false;
+    bool beingreleased = false;
+    double x = docker->x;
+    double y = docker->y;
+    double w = strlen(text) * h * FONTASPECTRATIO;
+    if(docker->vertical)
+        y += docker->totaloffset;
+    else
+        x += docker->totaloffset;
+
+    SDL_Rect rectscreen = boxuitoscreen(cam, x, y, w, h);
+    if(! (mousex < rectscreen.x ||
+          mousex > rectscreen.x + rectscreen.w ||
+          mousey < rectscreen.y ||
+          mousey > rectscreen.y + rectscreen.h))
+    {
+        beinghovered = true;
+        if(mouseleftdown)
+        {
+            beingheld = true;
+        }
+        // TODO(aidan): else if?
+        if(mouseleftup)
+        {
+            beingreleased = true;
+        }
+    }
+
+    // render background rect
+    if(beingheld)
+    {
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
+        SDL_RenderFillRect(cam.renderer, &rectscreen);
+    }
+    else if(beinghovered)
+    {
+        SDL_SetRenderDrawColor(cam.renderer, 100, 100, 100, 150);
+        SDL_RenderFillRect(cam.renderer, &rectscreen);
+    }
+    else
+    {
+        SDL_SetRenderDrawColor(cam.renderer, 55, 55, 55, 150);
+        SDL_RenderFillRect(cam.renderer, &rectscreen);
+    }
+    // render text
+    if(beingheld)
+        SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
+    else
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
+    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, true);
+    // render border rect
+    SDL_RenderDrawRect(cam.renderer, &rectscreen);
+
+    if(docker->vertical)
+        docker->totaloffset += h;
+    else
+        docker->totaloffset += w;
+
+    return beingreleased;
+}
+
+int
+drawbox(Camera cam, double x, double y, double w, double h)
+{
+    SDL_Rect rect = boxgametoscreen(cam, x, y, w, h);
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
 int
-debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
+drawworldgridaux(Camera cam, double gapsize, SDL_Color color)
 {
 
     double minx = cam.x - cam.w / 2.0 - fmod(cam.x - cam.w / 2.0, gapsize);
@@ -120,8 +231,8 @@ debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
                            color.a);
     for(int x = minx; x <= maxx; x+= gapsize)
     {
-        Vectori minscreenpos = vectorftoscreen(cam, x, miny);
-        Vectori maxscreenpos = vectorftoscreen(cam, x, maxy);
+        Vectori minscreenpos = vectorfgametoscreen(cam, x, miny);
+        Vectori maxscreenpos = vectorfgametoscreen(cam, x, maxy);
         SDL_RenderDrawLine(cam.renderer,
                            minscreenpos.x,
                            minscreenpos.y,
@@ -130,8 +241,8 @@ debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
     }
     for(int y = miny; y <= maxy; y+= gapsize)
     {
-        Vectori minscreenpos = vectorftoscreen(cam, minx, y);
-        Vectori maxscreenpos = vectorftoscreen(cam, maxx, y);
+        Vectori minscreenpos = vectorfgametoscreen(cam, minx, y);
+        Vectori maxscreenpos = vectorfgametoscreen(cam, maxx, y);
         SDL_RenderDrawLine(cam.renderer,
                            minscreenpos.x,
                            minscreenpos.y,
@@ -140,25 +251,25 @@ debugrenderworldgridaux(Camera cam, double gapsize, SDL_Color color)
     }
 }
 
-int debugrenderworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
+int drawworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
 {
     if(reccount >= 7)
     {
-        printf("debugrenderworldgrid: WTF\n");
+        printf("drawworldgrid: WTF\n");
         return 1;
     }
 
     // find appropriate gap size
     if(cam.w / gapsize > 8.0 || cam.h / gapsize > 8.0) 
     {
-        //printf("Nested debugrendergrid: size=%f\n", gapsize);
-        debugrenderworldgrid(cam, gapsize * 2.0, color, reccount + 1);
+        //printf("Nested drawgrid: size=%f\n", gapsize);
+        drawworldgrid(cam, gapsize * 2.0, color, reccount + 1);
         return 0;
     }
     else if (cam.w / gapsize < 4.0 || cam.h / gapsize < 4.0) 
     {
-        //printf("Nested debugrendergrid: size=%f\n", gapsize);
-        debugrenderworldgrid(cam, gapsize / 2.0, color, reccount + 1);
+        //printf("Nested drawgrid: size=%f\n", gapsize);
+        drawworldgrid(cam, gapsize / 2.0, color, reccount + 1);
         return 0;
     }
 
@@ -167,28 +278,30 @@ int debugrenderworldgrid(Camera cam, double gapsize, SDL_Color color, int reccou
 
     // render sub-grid
     SDL_Color subcolor = color;
-    //subcolor.a /= 5;
     subcolor.a = subalpha;
-    debugrenderworldgridaux(cam, gapsize / 2.0, subcolor);
+    drawworldgridaux(cam, gapsize / 2.0, subcolor);
 
-    debugrenderworldgridaux(cam, gapsize, color);
+    drawworldgridaux(cam, gapsize, color);
 }
 
 int
 render(Camera cam)
 {
-    SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(cam.renderer, 155, 155, 155, 255);
     SDL_RenderClear(cam.renderer);
         // draw background canvas (to make sure of the size)
-    SDL_Rect canvasrect = boxtoscreen(cam,
-                                        -cam.w / 2 + cam.x,
-                                        -cam.h / 2 + cam.y,
-                                        cam.w,
-                                        cam.h);
-    SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 255);
-    SDL_RenderFillRect(cam.renderer, &canvasrect);
+    //SDL_Rect canvasrect = boxgametoscreen(cam,
+    //                                    -cam.w / 2 + cam.x,
+    //                                    -cam.h / 2 + cam.y,
+    //                                    cam.w,
+    //                                    cam.h);
+    //SDL_SetRenderDrawColor(cam.renderer, 155, 155, 155, 255);
+    //SDL_RenderFillRect(cam.renderer, &canvasrect);
 
-    debugrenderworldgrid(cam, debug.worldgridgapsize, debug.worldgridcolor, 0);
+    if(debug.worldgrid)
+    {
+        drawworldgrid(cam, debug.worldgridgapsize, debug.worldgridcolor, 0);
+    }
 
     Spirit spirit;
     for(int i = 0; i < spiritcount; i++)
@@ -201,17 +314,36 @@ render(Camera cam)
                                    spirit.color.g,
                                    spirit.color.b,
                                    spirit.color.a);
-            debugrenderbox(cam,
+            drawbox(cam,
                            spirit.x - spirit.size / 2,
                            spirit.y - spirit.size / 2,
                            spirit.size,
                            spirit.size
                            );
-            SDL_SetRenderDrawColor(maincam.renderer, 255, 0, 0, 255);
-            debugrenderbox(maincam, -10, -10, 20, 20);
+            SDL_SetRenderDrawColor(cam.renderer, 255, 0, 0, 255);
+            drawbox(cam, -10, -10, 20, 20);
         }
     }
-    rendersidebars(cam);
+    
+    // render ui
+    ButtonDocker debugdocker;
+    debugdocker.x = cam.wui*-1/2;
+    debugdocker.y = cam.hui*-1/2;
+    debugdocker.totaloffset = 0;
+    debugdocker.vertical = false;
+    if(mouseleftup) {
+        printf("Mouse Left Button UP\n");
+    }
+    if(drawbutton(cam, &debugdocker, "grid", 5))
+    {
+        debug.worldgrid = !debug.worldgrid;
+    }
+    if(drawbutton(cam, &debugdocker, "colliders", 5))
+    {
+        debug.colliders = !debug.colliders;
+    }
+
+    drawsidebars(cam);
     SDL_RenderPresent(cam.renderer);
 }
 
@@ -270,8 +402,6 @@ updateplayermovement()
 
     maincam.x += poschange.x * maincam.w;
     maincam.y += poschange.y * maincam.h;
-    mousepos.x += poschange.x;
-    mousepos.y += poschange.y;
 }
 
 
@@ -281,23 +411,27 @@ int main()
     srand(time(0));
 
     initcolors();
+    loadfonts();
 
     debug.fps = 0;
     debug.collidercolor.r = 255;
     debug.collidercolor.g = 255;
     debug.collidercolor.b = 255;
     debug.collidercolor.a = 255;
-    debug.colliders = 1;
+    debug.colliders = false;
     debug.worldgridcolor.r = 0;
     debug.worldgridcolor.g = 0;
     debug.worldgridcolor.b = 0;
     debug.worldgridcolor.a = 255;
     debug.worldgridgapsize = 20;
+    debug.worldgrid = true;
 
-    maincam.x = 0;
-    maincam.y = 0;
+    maincam.x = -5;
+    maincam.y = -5;
     maincam.w = 100;
     maincam.h = 100;
+    maincam.wui = 100;
+    maincam.hui = 100;
     maincam.minw = 40;
     maincam.minh = 40; // TODO(aidan): find out why values below 40
                        // cause world grid rendering bugs
@@ -319,8 +453,8 @@ int main()
     bounds[3].y = maincam.y + maincam.h;
     bounds[3].w = maincam.w; bounds[1].h = maincam.h;
 
-    mousepos.x = maincam.x + maincam.w / 2;
-    mousepos.y = maincam.y + maincam.h / 2;
+    mousex = maincam.x + maincam.w / 2;
+    mousey = maincam.y + maincam.h / 2;
 
     spiritcount = 0;
     for(int i = 0; i < 10; i++)
@@ -362,6 +496,8 @@ int main()
             while(running)
             {
                 SDL_Event event;
+
+                mouseleftup = false;
                 while(SDL_PollEvent(&event))
                 {
                     if(handleevent(&event))
@@ -394,13 +530,23 @@ bool handleevent(SDL_Event *event)
         } break;
         case SDL_MOUSEMOTION:
         {
-            Vectorf mouseposingame = vectorftogame(maincam,
-                                                   event->motion.x,
-                                                   event->motion.y);
-            mousepos.x = mouseposingame.x;
-            mousepos.y = mouseposingame.y;
-                // TODO(aidan): maybe change this to print floats (limit
-                // digits though)
+            mousex = event->motion.x;
+            mousey = event->motion.y;
+        } break;
+        case SDL_MOUSEBUTTONDOWN:
+        {
+            if(event->button.button == SDL_BUTTON_LEFT)
+            {
+                mouseleftdown = true;
+            }
+        } break;
+        case SDL_MOUSEBUTTONUP:
+        {
+            if(event->button.button == SDL_BUTTON_LEFT)
+            {
+                mouseleftdown = false;
+                mouseleftup = true;
+            }
         } break;
 
         case SDL_KEYDOWN:

@@ -22,6 +22,7 @@ Camera {
     double w; double h; // in game units
     double minw; double minh;
     double maxw; double maxh;
+    double wui; double hui;
     int wres; int hres;
     //double zoom;
     SDL_Renderer *renderer;
@@ -141,7 +142,7 @@ boxandcirclecolliding(double x1, double y1, double radius, double x2, double y2,
 }
 
 Vectori
-vectorftoscreen(Camera cam, double x, double y)
+vectorfgametoscreen(Camera cam, double x, double y)
 {
     Vectori posincam;
     if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
@@ -172,7 +173,7 @@ vectorftoscreen(Camera cam, double x, double y)
 }
 
 Vectorf
-vectorftogame(Camera cam, double x, double y)
+vectorfscreentogame(Camera cam, double x, double y)
 {
     // TODO(aidan)
     Vectorf posincam;
@@ -180,7 +181,7 @@ vectorftogame(Camera cam, double x, double y)
 }
 
 SDL_Rect
-boxtoscreen(Camera cam, double x, double y, double w, double h)
+boxgametoscreen(Camera cam, double x, double y, double w, double h)
 {
     SDL_Rect rectincam;
     if((double)(cam.w) / (double)(cam.h) > (double)(cam.wres) / (double)(cam.hres))
@@ -217,6 +218,45 @@ boxtoscreen(Camera cam, double x, double y, double w, double h)
     return rectincam;
 }
 
+SDL_Rect
+boxuitoscreen(Camera cam, double x, double y, double w, double h)
+{
+    SDL_Rect rectincam;
+    if((double)(cam.w) / (double)(cam.hui) > (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is taller
+        double screentocamratio = (double)cam.wres / (double)cam.wui;
+        double yoffset = (cam.hres - (screentocamratio * cam.hui)) / 2;
+        rectincam.y = (y + cam.hui / 2) * screentocamratio;
+        rectincam.y += yoffset;
+        rectincam.x = (x + cam.wui / 2) / cam.wui * cam.wres;
+        rectincam.h = h * screentocamratio;
+        rectincam.w = w / cam.wui * cam.wres;
+    }
+    else if((double)(cam.wui) / (double)(cam.hui) < (double)(cam.wres) / (double)(cam.hres))
+    {
+        // is longer
+        double screentocamratio = (double)cam.hres / (double)cam.hui;
+        double xoffset = (cam.wres - (screentocamratio * cam.wui)) / 2;
+        rectincam.x = (x + cam.wui / 2) * screentocamratio;
+        rectincam.x += xoffset;
+        rectincam.y = (y + cam.hui / 2) / cam.hui * cam.hres;
+        rectincam.w = w * screentocamratio;
+        rectincam.h = h / cam.hui * cam.hres;
+    }
+    else
+    {
+        // is neither
+        rectincam.x = (x + cam.wui / 2) / cam.wui * cam.wres;
+        rectincam.y = (y + cam.hui / 2) / cam.hui * cam.hres;
+        rectincam.w = w / cam.wui * cam.wres;
+        rectincam.h = h / cam.hui * cam.hres;
+    }
+    //printf("%d, %d, %d, %d\n", rectincam.x, rectincam.y, rectincam.w, rectincam.h);
+    return rectincam;
+}
+
+
     // converts the camera bounds to a Box
 Box
 camtobox(Camera cam)
@@ -229,7 +269,7 @@ camtobox(Camera cam)
     return box;
 }
 
-int rendersidebars(Camera cam)
+int drawsidebars(Camera cam)
 {
     SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
     SDL_Rect bars[2];
