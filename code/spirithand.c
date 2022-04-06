@@ -173,26 +173,87 @@ drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
 
     // render background rect
     if(beingheld)
-    {
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-        SDL_RenderFillRect(cam.renderer, &rectscreen);
-    }
     else if(beinghovered)
-    {
         SDL_SetRenderDrawColor(cam.renderer, 100, 100, 100, 150);
-        SDL_RenderFillRect(cam.renderer, &rectscreen);
-    }
     else
-    {
         SDL_SetRenderDrawColor(cam.renderer, 55, 55, 55, 150);
-        SDL_RenderFillRect(cam.renderer, &rectscreen);
-    }
+    SDL_RenderFillRect(cam.renderer, &rectscreen);
     // render text
     if(beingheld)
         SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
     else
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
     drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, true);
+    // render border rect
+    SDL_RenderDrawRect(cam.renderer, &rectscreen);
+
+    if(docker->vertical)
+        docker->totaloffset += h;
+    else
+        docker->totaloffset += w;
+
+    return beingreleased;
+}
+
+bool
+drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool checked)
+{
+    bool beinghovered = false;
+    bool beingheld = false;
+    bool beingreleased = false;
+    double x = docker->x;
+    double y = docker->y;
+    double w = strlen(text) * h * FONTASPECTRATIO + h;
+    if(docker->vertical)
+        y += docker->totaloffset;
+    else
+        x += docker->totaloffset;
+
+    SDL_Rect rectscreen = boxuitoscreen(cam, x, y, w, h);
+    if(! (mousex < rectscreen.x ||
+          mousex > rectscreen.x + rectscreen.w ||
+          mousey < rectscreen.y ||
+          mousey > rectscreen.y + rectscreen.h))
+    {
+        beinghovered = true;
+        if(mouseleftdown)
+        {
+            beingheld = true;
+        }
+        // TODO(aidan): else if?
+        if(mouseleftup)
+        {
+            beingreleased = true;
+        }
+    }
+
+    // render background rect
+    if(beingheld)
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
+    else if(beinghovered)
+        SDL_SetRenderDrawColor(cam.renderer, 100, 100, 100, 150);
+    else
+        SDL_SetRenderDrawColor(cam.renderer, 55, 55, 55, 150);
+    SDL_RenderFillRect(cam.renderer, &rectscreen);
+    // render text
+    if(beingheld)
+        SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
+    else
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
+    //render check box
+    if(checked)
+    {
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
+        SDL_Rect checkboxrect = rectscreen;
+        checkboxrect.w = rectscreen.h;
+        checkboxrect.x += rectscreen.h / 4;
+        checkboxrect.y += rectscreen.h / 4;
+        checkboxrect.w -= rectscreen.h / 4 * 2;
+        checkboxrect.h -= rectscreen.h / 4 * 2;
+        SDL_RenderFillRect(cam.renderer, &checkboxrect);
+    }
+    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, true);
     // render border rect
     SDL_RenderDrawRect(cam.renderer, &rectscreen);
 
@@ -214,6 +275,7 @@ drawbox(Camera cam, double x, double y, double w, double h)
 int
 drawworldgridaux(Camera cam, double gapsize, SDL_Color color)
 {
+    color.a = color.a / 4;
 
     double minx = cam.x - cam.w / 2.0 - fmod(cam.x - cam.w / 2.0, gapsize);
     double miny = cam.y - cam.h / 2.0 - fmod(cam.y - cam.h / 2.0, gapsize);
@@ -334,11 +396,11 @@ render(Camera cam)
     if(mouseleftup) {
         printf("Mouse Left Button UP\n");
     }
-    if(drawbutton(cam, &debugdocker, "grid", 5))
+    if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
     {
         debug.worldgrid = !debug.worldgrid;
     }
-    if(drawbutton(cam, &debugdocker, "colliders", 5))
+    if(drawbuttoncheckbox(cam, &debugdocker, "colliders", 5, debug.colliders))
     {
         debug.colliders = !debug.colliders;
     }
