@@ -44,12 +44,13 @@ Keysdown {
 } Keysdown;
 
 typedef struct
-ButtonDocker {
+UIDocker {
     int x;
     int y;
     int totaloffset;
     bool vertical;
-} ButtonDocker;
+    int offsetscalar;
+} UIDocker;
 
 int mousex;
 int mousey;
@@ -62,6 +63,7 @@ global_variable Camera maincam;
 
 TTF_Font *debugfont;
 #define FONTASPECTRATIO 0.5
+bool debugMenuEnabled;
 
 #define MAXSPIRITS 50 // idk 54 kinda sounds and feels right
 global_variable int spiritcount;
@@ -98,17 +100,44 @@ updatespirits()
     {
         spirit = &(spirits[i]);
         // handle collisions
-        if(spirit->x + spirit->size / 2 > maincam.x + maincam.w / 2 ||
-           spirit->x - spirit->size / 2 < maincam.x - maincam.w / 2)
+        if(spirit->x + spirit->size / 2 + spirit->velx > maincam.x + maincam.w / 2 ||
+           spirit->x - spirit->size / 2 + spirit->velx < maincam.x - maincam.w / 2)
         {
             spirit->velx *= -1;
         }
-        if(spirit->y + spirit->size / 2 > maincam.y + maincam.h / 2 ||
-           spirit->y - spirit->size / 2 < maincam.y - maincam.h / 2)
+        if(spirit->y + spirit->size / 2 + spirit->vely > maincam.y + maincam.h / 2 ||
+           spirit->y - spirit->size / 2 + spirit->vely < maincam.y - maincam.h / 2)
         {
             spirit->vely *= -1;
         }
 
+        for(int a = 0; a < spiritcount; a++)
+        {
+            Spirit* otherspirit = &(spirits[a]);
+            if(i == a)
+                continue;
+
+            if(spirit->x + spirit->size / 2.0 + spirit->velx > otherspirit->x - otherspirit->size / 2.0 &&
+               spirit->x - spirit->size / 2.0 + spirit->velx < otherspirit->x + otherspirit->size / 2.0 &&
+               spirit->y + spirit->size / 2.0 > otherspirit->y - otherspirit->size / 2.0 &&
+               spirit->y - spirit->size / 2.0 < otherspirit->y + otherspirit->size / 2.0)
+            {
+                spirit->velx *= -1;
+            }
+
+            if(spirit->y + spirit->size / 2.0 + spirit->vely > otherspirit->y - otherspirit->size / 2.0 &&
+               spirit->y - spirit->size / 2.0 + spirit->vely < otherspirit->y + otherspirit->size / 2.0 &&
+               spirit->x + spirit->size / 2.0 > otherspirit->x - otherspirit->size / 2.0 &&
+               spirit->x - spirit->size / 2.0 < otherspirit->x + otherspirit->size / 2.0)
+            {
+                spirit->vely *= -1;
+            }
+        }
+    }
+
+    for(int i = 0; i < spiritcount; i++)
+    {
+        spirit = &(spirits[i]);
         spirit->x += spirit->velx;
         spirit->y += spirit->vely;
     }
@@ -118,15 +147,33 @@ void
 loadfonts()
 {
     TTF_Init();
-    debugfont = TTF_OpenFont("resources/fonts/JetBrainsMono-Medium.ttf", 20);
+    debugfont = TTF_OpenFont("resources/fonts/JetBrainsMono-Medium.ttf", 90);
     if(debugfont == NULL)
         printf("Font could not be loaded!\n");
 }
 
     // returns the size
 int
-drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui)
+drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, UIDocker *docker)
 {
+    if(docker != NULL)
+    {
+        x = docker->x;
+        y = docker->y;
+        if(docker->vertical)
+            y += docker->totaloffset * docker->offsetscalar;
+        else
+            x += docker->totaloffset * docker->offsetscalar;
+    }
+
+    if(docker != NULL)
+    {
+        if(docker->vertical)
+            docker->totaloffset += h;
+        else
+            docker->totaloffset += strlen(text) * h * FONTASPECTRATIO;
+    }
+
     int textlength = strlen(text);
     SDL_Color color;
     SDL_GetRenderDrawColor(cam.renderer, &(color.r), &(color.g), &(color.b), &(color.a));
@@ -159,10 +206,11 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui)
         SDL_FreeSurface(glyphcache);
         SDL_DestroyTexture(glyph);
     }
+
 }
 
 bool
-drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
+drawbutton(Camera cam, UIDocker *docker, char *text, double h)
 {
     bool beinghovered = false;
     bool beingheld = false;
@@ -170,10 +218,13 @@ drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
     double x = docker->x;
     double y = docker->y;
     double w = strlen(text) * h * FONTASPECTRATIO;
-    if(docker->vertical)
-        y += docker->totaloffset;
-    else
-        x += docker->totaloffset;
+    if(docker != NULL)
+    {
+        if(docker->vertical)
+            y += docker->totaloffset * docker->offsetscalar;
+        else
+            x += docker->totaloffset * docker->offsetscalar;
+    }
 
     SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
     if(! (mousex < rectscreen.x ||
@@ -206,20 +257,23 @@ drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
         SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
     else
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, false);
+    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, false, NULL);
     // render border rect
     SDL_RenderDrawRect(cam.renderer, &rectscreen);
 
-    if(docker->vertical)
-        docker->totaloffset += h;
-    else
-        docker->totaloffset += w;
+    if(docker != NULL)
+    {
+        if(docker->vertical)
+            docker->totaloffset += h;
+        else
+            docker->totaloffset += w;
+    }
 
     return beingreleased;
 }
 
 bool
-drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool checked)
+drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool checked)
 {
     bool beinghovered = false;
     bool beingheld = false;
@@ -227,10 +281,12 @@ drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool 
     double x = docker->x;
     double y = docker->y;
     double w = strlen(text) * h * FONTASPECTRATIO + h;
+
     if(docker->vertical)
-        y += docker->totaloffset;
+        y += docker->totaloffset * docker->offsetscalar;
     else
-        x += docker->totaloffset;
+        x += docker->totaloffset * docker->offsetscalar;
+
 
     SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
     if(! (mousex < rectscreen.x ||
@@ -275,7 +331,7 @@ drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool 
         checkboxrect.h -= rectscreen.h / 4 * 2;
         SDL_RenderFillRect(cam.renderer, &checkboxrect);
     }
-    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, false);
+    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, false, NULL);
     // render border rect
     SDL_RenderDrawRect(cam.renderer, &rectscreen);
 
@@ -410,24 +466,35 @@ render(Camera cam)
     }
     
     // render ui
-    ButtonDocker debugdocker;
-    debugdocker.x = cam.wui*-1/2;
-    debugdocker.y = cam.hui*-1/2;
-    debugdocker.totaloffset = 0;
-    debugdocker.vertical = false;
-    if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
+    if(debugMenuEnabled)
     {
-        debug.worldgrid = !debug.worldgrid;
-    }
-    if(drawbuttoncheckbox(cam, &debugdocker, "colliders", 5, debug.colliders))
-    {
-        debug.colliders = !debug.colliders;
-    }
+        UIDocker debugdocker;
+        debugdocker.x = cam.wui*-1/2;
+        debugdocker.y = cam.hui*-1/2;
+        debugdocker.totaloffset = 0;
+        debugdocker.vertical = false;
+        debugdocker.offsetscalar = 1;
+        if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
+        {
+            debug.worldgrid = !debug.worldgrid;
+        }
+        if(drawbuttoncheckbox(cam, &debugdocker, "colliders", 5, debug.colliders))
+        {
+            debug.colliders = !debug.colliders;
+        }
 
-    char caminfobuffer[80];
-    sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
-    int caminfoh = 5;
-    drawtext(cam, caminfobuffer, cam.wui*-1/2, cam.hui/2 - caminfoh, caminfoh, debugfont, true);
+        char caminfobuffer[80];
+        sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
+        int caminfoh = 5;
+
+        debugdocker.x = cam.wui*-1/2;
+        debugdocker.y = cam.hui/2 - caminfoh;
+        debugdocker.totaloffset = 0;
+        debugdocker.vertical = true;
+        debugdocker.offsetscalar = -1;
+        drawtext(cam, caminfobuffer, 0, 0, caminfoh, debugfont, true, &debugdocker);
+        drawtext(cam, "fps: ", 0, 0, caminfoh, debugfont, true, &debugdocker);
+    }
 
 
     drawsidebars(cam);
@@ -513,6 +580,8 @@ int main()
     debug.worldgridgapsize = 20;
     debug.worldgrid = true;
 
+    debugMenuEnabled = true;
+
     maincam.x = 0;
     maincam.y = 0;
     maincam.w = 100;
@@ -543,7 +612,13 @@ int main()
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
 
-    spiritcount = 0;
+    //spiritcount = 0;
+    //Spirit *spirit1 = makespirit(-20, 0, 10, color_yellow);
+    //spirit1->velx = 0.1;
+    //spirit1->vely = 0;
+    //Spirit *spirit2 = makespirit(20, 0, 10, color_yellow);
+    //spirit2->velx = -0.1;
+    //spirit2->vely = 0;
     for(int i = 0; i < 10; i++)
     {
         Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
@@ -558,7 +633,6 @@ int main()
             newspirit->vely = -speed;
         else
             newspirit->vely = speed;
-
     }
 
     SDL_Init(SDL_INIT_VIDEO);
