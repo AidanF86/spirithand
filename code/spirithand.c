@@ -119,6 +119,16 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui)
     SDL_Color color;
     SDL_GetRenderDrawColor(cam.renderer, &(color.r), &(color.g), &(color.b), &(color.a));
 
+    if(ui)
+    {
+        //printf("drawtext:ui (%d, %d, %d)", x, y, h);
+        SDL_Rect screenrect = boxtoscreen(cam, x, y, 0, h, ui);
+        x = screenrect.x;
+        y = screenrect.y;
+        h = screenrect.h;
+        //printf(" -> (%d, %d, %d)\n", x, y, h);
+    }
+
     for(int i = 0; i < textlength; i++) {
         SDL_Rect rect;
         rect.x = x + (i * (h * FONTASPECTRATIO) ); // TODO(aidan): add spacing
@@ -153,7 +163,7 @@ drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
     else
         x += docker->totaloffset;
 
-    SDL_Rect rectscreen = boxuitoscreen(cam, x, y, w, h);
+    SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
     if(! (mousex < rectscreen.x ||
           mousex > rectscreen.x + rectscreen.w ||
           mousey < rectscreen.y ||
@@ -184,7 +194,7 @@ drawbutton(Camera cam, ButtonDocker *docker, char *text, double h)
         SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
     else
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, true);
+    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, false);
     // render border rect
     SDL_RenderDrawRect(cam.renderer, &rectscreen);
 
@@ -210,7 +220,7 @@ drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool 
     else
         x += docker->totaloffset;
 
-    SDL_Rect rectscreen = boxuitoscreen(cam, x, y, w, h);
+    SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
     if(! (mousex < rectscreen.x ||
           mousex > rectscreen.x + rectscreen.w ||
           mousey < rectscreen.y ||
@@ -253,7 +263,7 @@ drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool 
         checkboxrect.h -= rectscreen.h / 4 * 2;
         SDL_RenderFillRect(cam.renderer, &checkboxrect);
     }
-    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, true);
+    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, false);
     // render border rect
     SDL_RenderDrawRect(cam.renderer, &rectscreen);
 
@@ -268,7 +278,7 @@ drawbuttoncheckbox(Camera cam, ButtonDocker *docker, char *text, double h, bool 
 int
 drawbox(Camera cam, double x, double y, double w, double h)
 {
-    SDL_Rect rect = boxgametoscreen(cam, x, y, w, h);
+    SDL_Rect rect = boxtoscreen(cam, x, y, w, h, game);
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
@@ -405,6 +415,14 @@ render(Camera cam)
         debug.colliders = !debug.colliders;
     }
 
+        // cam pos and zoom
+    char caminfobuffer[80];
+    sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
+    int caminfoh = 5;
+    //drawtext(cam, caminfobuffer, cam.wui * -1/2, cam.hui - caminfoh, caminfoh, debugfont, true);
+    drawtext(cam, caminfobuffer, cam.wui*-1/2, cam.hui/2 - caminfoh, caminfoh, debugfont, true);
+
+
     drawsidebars(cam);
     SDL_RenderPresent(cam.renderer);
 }
@@ -412,7 +430,7 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 0.001;
+    double movespeed = 0.002;
     double zoomspeed = 0.002;
     Vectorf poschange = {0};
     double zoomchange = 0;
