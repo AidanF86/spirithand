@@ -30,7 +30,6 @@ Debuginfo {
     bool worldgrid;
     SDL_Color worldgridcolor;
     double worldgridgapsize;
-    int fps;
 } Debuginfo;
 
 typedef struct
@@ -57,6 +56,8 @@ int mousey;
 bool mouseleftdown;
 bool mouseleftup;
 
+int fps;
+
 global_variable Debuginfo debug;
 global_variable Keysdown keysdown;
 global_variable Camera maincam;
@@ -72,8 +73,6 @@ global_variable Spirit spirits[MAXSPIRITS];
 #define MAXOBSTACLES 50
 global_variable int maxobstacles;
 global_variable Box obstacles[MAXOBSTACLES];
-
-Box bounds[4];
 
 Spirit*
 makespirit(double x, double y, double size, SDL_Color color)
@@ -460,8 +459,6 @@ render(Camera cam)
                            spirit.size,
                            spirit.size
                            );
-            SDL_SetRenderDrawColor(cam.renderer, 255, 0, 0, 255);
-            drawbox(cam, -10, -10, 20, 20);
         }
     }
     
@@ -483,17 +480,22 @@ render(Camera cam)
             debug.colliders = !debug.colliders;
         }
 
-        char caminfobuffer[80];
-        sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
-        int caminfoh = 5;
 
+        int debugtexth = 5;
+        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
         debugdocker.x = cam.wui*-1/2;
-        debugdocker.y = cam.hui/2 - caminfoh;
+        debugdocker.y = cam.hui/2 - debugtexth;
         debugdocker.totaloffset = 0;
         debugdocker.vertical = true;
         debugdocker.offsetscalar = -1;
-        drawtext(cam, caminfobuffer, 0, 0, caminfoh, debugfont, true, &debugdocker);
-        drawtext(cam, "fps: ", 0, 0, caminfoh, debugfont, true, &debugdocker);
+
+        char caminfobuffer[80];
+        sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
+        drawtext(cam, caminfobuffer, 0, 0, debugtexth, debugfont, true, &debugdocker);
+
+        char fpstextbuffer[10];
+        sprintf(fpstextbuffer, "fps: %d", fps);
+        drawtext(cam, fpstextbuffer, 0, 0, debugtexth, debugfont, true, &debugdocker);
     }
 
 
@@ -504,8 +506,8 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 0.002;
-    double zoomspeed = 0.002;
+    double movespeed = 0.008;
+    double zoomspeed = 0.008;
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
@@ -558,6 +560,24 @@ updateplayermovement()
     maincam.y += poschange.y * maincam.h;
 }
 
+int
+SDLGetWindowRefreshRate(SDL_Window *window)
+{
+    SDL_DisplayMode mode;
+    int displayindex = SDL_GetWindowDisplayIndex(window);
+    int defaultrefreshrate = 60;
+    if(SDL_GetDesktopDisplayMode(displayindex, &mode) != 0 || mode.refresh_rate == 0)
+    {
+        return defaultrefreshrate;
+    }
+    return mode.refresh_rate;
+}
+
+float
+SDLGetSecondsElapsed(int oldcounter, int currentcounter)
+{
+    return ((float)(currentcounter - oldcounter) / (float)(SDL_GetPerformanceFrequency()));
+}
 
 
 int main()
@@ -567,7 +587,6 @@ int main()
     initcolors();
     loadfonts();
 
-    debug.fps = 0;
     debug.collidercolor.r = 255;
     debug.collidercolor.g = 255;
     debug.collidercolor.b = 255;
@@ -596,19 +615,6 @@ int main()
     maincam.wres = 640;
     maincam.hres = 480;
 
-    bounds[0].x = maincam.x - maincam.w;
-    bounds[0].y = maincam.y;
-    bounds[0].w = maincam.w; bounds[1].h = maincam.h;
-    bounds[1].x = maincam.x;
-    bounds[1].y = maincam.y - maincam.h;
-    bounds[1].w = maincam.w; bounds[1].h = maincam.h;
-    bounds[2].x = maincam.x + maincam.w;
-    bounds[2].y = maincam.y;
-    bounds[2].w = maincam.w; bounds[1].h = maincam.h;
-    bounds[3].x = maincam.x;
-    bounds[3].y = maincam.y + maincam.h;
-    bounds[3].w = maincam.w; bounds[1].h = maincam.h;
-
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
 
@@ -624,7 +630,7 @@ int main()
         Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
         int left = randint(0, 2);
         int up = randint(0, 2);
-        double speed = 0.1;
+        double speed = 0.3;
         if(left == 0)
             newspirit->velx = -speed;
         else
@@ -653,11 +659,14 @@ int main()
         {
             maincam.renderer = renderer;
 
+            int gameupdatehz = 60;
+            float targetsecondsperframe = 1.0f / (float)gameupdatehz;
+            int lastcounter = SDL_GetPerformanceCounter();
+
             bool running = true;
             while(running)
             {
                 SDL_Event event;
-
                 mouseleftup = false;
                 while(SDL_PollEvent(&event))
                 {
@@ -666,12 +675,33 @@ int main()
                         running = false;
                     }
                 }
+
                 updateplayermovement();
                 updatespirits();
                 render(maincam);
-                //sleep(0.0166);
-                usleep(1660);
-                //usleep(1000);
+
+                int perfcountfrequency = SDL_GetPerformanceFrequency();
+
+                while(SDLGetSecondsElapsed(lastcounter, SDL_GetPerformanceCounter()) < targetsecondsperframe)
+                {
+                    int timetosleep = ((targetsecondsperframe - 
+                                        SDLGetSecondsElapsed(lastcounter, SDL_GetPerformanceCounter())) * 1000);
+                    if(timetosleep > 0)
+                    {
+                        SDL_Delay(timetosleep);
+                    }
+                    while (SDLGetSecondsElapsed(lastcounter, SDL_GetPerformanceCounter()) < targetsecondsperframe)
+                    {
+                        // waiting...
+                    }
+                }
+
+                int endcounter = SDL_GetPerformanceCounter();
+                int counterelapsed = endcounter - lastcounter;
+
+                double msperframe = ((1000.0f * (double)counterelapsed) / (double)perfcountfrequency);
+                fps = round( (double)perfcountfrequency / (double)counterelapsed );
+                lastcounter = endcounter;
             }
         }
     }
