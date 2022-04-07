@@ -97,6 +97,18 @@ updatespirits()
     for(int i = 0; i < spiritcount; i++)
     {
         spirit = &(spirits[i]);
+        // handle collisions
+        if(spirit->x + spirit->size / 2 > maincam.x + maincam.w / 2 ||
+           spirit->x - spirit->size / 2 < maincam.x - maincam.w / 2)
+        {
+            spirit->velx *= -1;
+        }
+        if(spirit->y + spirit->size / 2 > maincam.y + maincam.h / 2 ||
+           spirit->y - spirit->size / 2 < maincam.y - maincam.h / 2)
+        {
+            spirit->vely *= -1;
+        }
+
         spirit->x += spirit->velx;
         spirit->y += spirit->vely;
     }
@@ -403,9 +415,6 @@ render(Camera cam)
     debugdocker.y = cam.hui*-1/2;
     debugdocker.totaloffset = 0;
     debugdocker.vertical = false;
-    if(mouseleftup) {
-        printf("Mouse Left Button UP\n");
-    }
     if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
     {
         debug.worldgrid = !debug.worldgrid;
@@ -415,11 +424,9 @@ render(Camera cam)
         debug.colliders = !debug.colliders;
     }
 
-        // cam pos and zoom
     char caminfobuffer[80];
     sprintf(caminfobuffer, "(%d, %d) %d", (int)cam.x, (int)cam.y, (int)cam.w);
     int caminfoh = 5;
-    //drawtext(cam, caminfobuffer, cam.wui * -1/2, cam.hui - caminfoh, caminfoh, debugfont, true);
     drawtext(cam, caminfobuffer, cam.wui*-1/2, cam.hui/2 - caminfoh, caminfoh, debugfont, true);
 
 
@@ -498,7 +505,7 @@ int main()
     debug.collidercolor.g = 255;
     debug.collidercolor.b = 255;
     debug.collidercolor.a = 255;
-    debug.colliders = false;
+    debug.colliders = true;
     debug.worldgridcolor.r = 0;
     debug.worldgridcolor.g = 0;
     debug.worldgridcolor.b = 0;
@@ -506,8 +513,8 @@ int main()
     debug.worldgridgapsize = 20;
     debug.worldgrid = true;
 
-    maincam.x = -5;
-    maincam.y = -5;
+    maincam.x = 0;
+    maincam.y = 0;
     maincam.w = 100;
     maincam.h = 100;
     maincam.wui = 100;
@@ -542,7 +549,7 @@ int main()
         Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
         int left = randint(0, 2);
         int up = randint(0, 2);
-        double speed = 0.05;
+        double speed = 0.1;
         if(left == 0)
             newspirit->velx = -speed;
         else
@@ -590,6 +597,7 @@ int main()
                 render(maincam);
                 //sleep(0.0166);
                 usleep(1660);
+                //usleep(1000);
             }
         }
     }
