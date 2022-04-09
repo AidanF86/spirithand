@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -14,14 +15,7 @@
 #include "mathandphysics.c"
 
 bool handleevent(SDL_Event *event);
-
-typedef struct
-Spirit {
-    double x; double y;
-    double velx; double vely;
-    double size;
-    SDL_Color color;
-} Spirit;
+double secselapsed;
 
 typedef struct
 Debuginfo {
@@ -51,6 +45,25 @@ UIDocker {
     int offsetscalar;
 } UIDocker;
 
+#define MAX_ANIM_FRAMES 10
+typedef struct
+Animation {
+    SDL_Texture *frames[MAX_ANIM_FRAMES];
+    int numframes;
+    int currentframe;
+    double frametime;
+    double timetillnext;
+} Animation;
+
+typedef struct
+Spirit {
+    double x; double y;
+    double velx; double vely;
+    double size;
+    SDL_Color color;
+    Animation anim;
+} Spirit;
+
 int mousex;
 int mousey;
 bool mouseleftdown;
@@ -69,10 +82,29 @@ bool debugMenuEnabled;
 #define MAXSPIRITS 50 // idk 54 kinda sounds and feels right
 global_variable int spiritcount;
 global_variable Spirit spirits[MAXSPIRITS];
+global_variable SDL_Texture *spirittextures[2];
 
 #define MAXOBSTACLES 50
 global_variable int maxobstacles;
 global_variable Box obstacles[MAXOBSTACLES];
+
+void advanceanimation(Animation *anim, double time)
+{
+    if(anim->numframes == 0)
+    {
+        return;
+    }
+    anim->timetillnext -= time;
+    if(anim->timetillnext <= 0)
+    {
+        anim->timetillnext = anim->frametime;
+        anim->currentframe++;
+        if(anim->currentframe >= anim->numframes)
+        {
+            anim->currentframe = 0;
+        }
+    }
+}
 
 Spirit*
 makespirit(double x, double y, double size, SDL_Color color)
@@ -140,6 +172,21 @@ updatespirits()
         spirit->x += spirit->velx;
         spirit->y += spirit->vely;
     }
+}
+
+SDL_Texture *
+texturefromimage(SDL_Renderer *renderer, char *filename)
+{
+    SDL_Surface *surface = IMG_Load(filename);
+    if(surface == NULL)
+    {
+        printf("Cannot find image file %s\n", filename);
+        //SDL_Quit(); // TODO(aidan): should we really quit?
+        return NULL;
+    }
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    return texture;
 }
 
 void
@@ -442,23 +489,36 @@ render(Camera cam)
         drawworldgrid(cam, debug.worldgridgapsize, debug.worldgridcolor, 0);
     }
 
-    Spirit spirit;
+    Spirit *spirit;
     for(int i = 0; i < spiritcount; i++)
     {
-        spirit = spirits[i];
+        spirit = &(spirits[i]);
+        SDL_Rect spiritrect = boxtoscreen(cam,
+                                          spirit->x - spirit->size / 2,
+                                          spirit->y - spirit->size / 2,
+                                          spirit->size,
+                                          spirit->size,
+                                          game);
+
+        advanceanimation(&(spirit->anim), secselapsed);
+        SDL_RenderCopy(cam.renderer,
+                       spirit->anim.frames[spirit->anim.currentframe],
+                       NULL,
+                       &spiritrect);
+
+        // draw colliders if debug option enabled
         if(debug.colliders)
         {
             SDL_SetRenderDrawColor(cam.renderer,
-                                   spirit.color.r,
-                                   spirit.color.g,
-                                   spirit.color.b,
-                                   spirit.color.a);
+                                   spirit->color.r,
+                                   spirit->color.g,
+                                   spirit->color.b,
+                                   spirit->color.a);
             drawbox(cam,
-                           spirit.x - spirit.size / 2,
-                           spirit.y - spirit.size / 2,
-                           spirit.size,
-                           spirit.size
-                           );
+                    spirit->x - spirit->size / 2,
+                    spirit->y - spirit->size / 2,
+                    spirit->size,
+                    spirit->size);
         }
     }
     
@@ -625,21 +685,6 @@ int main()
     //Spirit *spirit2 = makespirit(20, 0, 10, color_yellow);
     //spirit2->velx = -0.1;
     //spirit2->vely = 0;
-    for(int i = 0; i < 10; i++)
-    {
-        Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
-        int left = randint(0, 2);
-        int up = randint(0, 2);
-        double speed = 0.3;
-        if(left == 0)
-            newspirit->velx = -speed;
-        else
-            newspirit->velx = speed;
-        if(up == 0)
-            newspirit->vely = -speed;
-        else
-            newspirit->vely = speed;
-    }
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -659,10 +704,38 @@ int main()
         {
             maincam.renderer = renderer;
 
+            // load textures
+            spirittextures[0] = texturefromimage(renderer, "resources/graphics/spirit0.png");
+            spirittextures[1] = texturefromimage(renderer, "resources/graphics/spirit1.png");
+
+            for(int i = 0; i < 10; i++)
+            {
+                Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
+                newspirit->anim.frames[0] = spirittextures[0];
+                newspirit->anim.frames[1] = spirittextures[1];
+                newspirit->anim.numframes = 2;
+                newspirit->anim.currentframe = randint(0, newspirit->anim.numframes);
+                newspirit->anim.frametime = 1;
+                newspirit->anim.timetillnext = randdouble(0, newspirit->anim.frametime);
+
+
+                int left = randint(0, 2);
+                int up = randint(0, 2);
+                double speed = 0.3;
+                if(left == 0)
+                    newspirit->velx = -speed;
+                else
+                    newspirit->velx = speed;
+                if(up == 0)
+                    newspirit->vely = -speed;
+                else
+                    newspirit->vely = speed;
+            }
+
             int gameupdatehz = 60;
             float targetsecondsperframe = 1.0f / (float)gameupdatehz;
             int lastcounter = SDL_GetPerformanceCounter();
-
+            secselapsed = 0;
             bool running = true;
             while(running)
             {
@@ -698,6 +771,8 @@ int main()
 
                 int endcounter = SDL_GetPerformanceCounter();
                 int counterelapsed = endcounter - lastcounter;
+
+                secselapsed = counterelapsed / 1000000000.0;
 
                 double msperframe = ((1000.0f * (double)counterelapsed) / (double)perfcountfrequency);
                 fps = round( (double)perfcountfrequency / (double)counterelapsed );
