@@ -127,6 +127,13 @@ int
 updatespirits()
 {
     Spirit* spirit;
+    int velchanges [spiritcount][2];
+    for(int i = 0; i < spiritcount; i++)
+    {
+        velchanges[i][0] = 1;
+        velchanges[i][1] = 1;
+    }
+
     for(int i = 0; i < spiritcount; i++)
     {
         spirit = &(spirits[i]);
@@ -142,26 +149,27 @@ updatespirits()
             spirit->vely *= -1;
         }
 
+
         for(int a = 0; a < spiritcount; a++)
         {
             Spirit* otherspirit = &(spirits[a]);
             if(i == a)
                 continue;
 
-            if(spirit->x + spirit->size / 2.0 + spirit->velx > otherspirit->x - otherspirit->size / 2.0 &&
-               spirit->x - spirit->size / 2.0 + spirit->velx < otherspirit->x + otherspirit->size / 2.0 &&
+            if(spirit->x + spirit->size / 2.0 + spirit->velx > otherspirit->x - otherspirit->size / 2.0 + otherspirit->velx &&
+               spirit->x - spirit->size / 2.0 + spirit->velx < otherspirit->x + otherspirit->size / 2.0 + otherspirit->velx &&
                spirit->y + spirit->size / 2.0 > otherspirit->y - otherspirit->size / 2.0 &&
                spirit->y - spirit->size / 2.0 < otherspirit->y + otherspirit->size / 2.0)
             {
-                spirit->velx *= -1;
+                velchanges[i][0] = -1;
             }
 
-            if(spirit->y + spirit->size / 2.0 + spirit->vely > otherspirit->y - otherspirit->size / 2.0 &&
-               spirit->y - spirit->size / 2.0 + spirit->vely < otherspirit->y + otherspirit->size / 2.0 &&
+            if(spirit->y + spirit->size / 2.0 + spirit->vely > otherspirit->y - otherspirit->size / 2.0 + otherspirit->vely &&
+               spirit->y - spirit->size / 2.0 + spirit->vely < otherspirit->y + otherspirit->size / 2.0 + otherspirit->vely &&
                spirit->x + spirit->size / 2.0 > otherspirit->x - otherspirit->size / 2.0 &&
                spirit->x - spirit->size / 2.0 < otherspirit->x + otherspirit->size / 2.0)
             {
-                spirit->vely *= -1;
+                velchanges[i][1] = -1;
             }
         }
     }
@@ -169,6 +177,9 @@ updatespirits()
     for(int i = 0; i < spiritcount; i++)
     {
         spirit = &(spirits[i]);
+        spirit->velx *= velchanges[i][0];
+        spirit->vely *= velchanges[i][1];
+
         spirit->x += spirit->velx;
         spirit->y += spirit->vely;
     }
@@ -715,7 +726,7 @@ int main()
                 newspirit->anim.frames[1] = spirittextures[1];
                 newspirit->anim.numframes = 2;
                 newspirit->anim.currentframe = randint(0, newspirit->anim.numframes);
-                newspirit->anim.frametime = 1;
+                newspirit->anim.frametime = 0.5;
                 newspirit->anim.timetillnext = randdouble(0, newspirit->anim.frametime);
 
 
