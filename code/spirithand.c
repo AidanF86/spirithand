@@ -15,7 +15,7 @@
 #include "mathandphysics.c"
 
 bool handleevent(SDL_Event *event);
-double secselapsed;
+double deltatime;
 
 typedef struct
 Debuginfo {
@@ -181,14 +181,14 @@ updatespirits()
                 continue;
             }
 
-            if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx))
+            if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx * deltatime))
             {
                 velchanges[i][0] = -1;
             }
 
-            if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely))
+            if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely * deltatime))
             {
                 velchanges[i][1] = -1;
             }
@@ -202,13 +202,13 @@ updatespirits()
                 double obstacley = y*mapsquaresize;
                 if(mainmap[x][y])
                 {
-                    if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
+                    if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         velchanges[i][0] = -1;
 
                     }
-                    if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
+                    if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         velchanges[i][1] = -1;
@@ -225,8 +225,8 @@ updatespirits()
         spirit->velx *= velchanges[i][0];
         spirit->vely *= velchanges[i][1];
 
-        spirit->x += spirit->velx;
-        spirit->y += spirit->vely;
+        spirit->x += spirit->velx * deltatime;
+        spirit->y += spirit->vely * deltatime;
     }
 }
 
@@ -582,7 +582,7 @@ render(Camera cam)
                                           spirit->size,
                                           game);
 
-        advanceanimation(&(spirit->anim), secselapsed);
+        advanceanimation(&(spirit->anim), deltatime);
         SDL_RenderCopy(cam.renderer,
                        spirit->anim.frames[spirit->anim.currentframe],
                        NULL,
@@ -650,33 +650,33 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 0.008;
-    double zoomspeed = 0.008;
+    double movespeed = 0.5;
+    double zoomspeed = 0.5;
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
     {
-        poschange.y -= movespeed;
+        poschange.y -= movespeed * deltatime;
     }
     if(keysdown.down)
     {
-        poschange.y += movespeed;
+        poschange.y += movespeed * deltatime;
     }
     if(keysdown.left)
     {
-        poschange.x -= movespeed;
+        poschange.x -= movespeed * deltatime;
     }
     if(keysdown.right)
     {
-        poschange.x += movespeed;
+        poschange.x += movespeed * deltatime;
     }
     if(keysdown.z)
     {
-        zoomchange -= zoomspeed;
+        zoomchange -= zoomspeed * deltatime;
     }
     if(keysdown.x)
     {
-        zoomchange += zoomspeed;
+        zoomchange += zoomspeed * deltatime;
     }
         
     maincam.w += zoomchange * maincam.w;
@@ -808,7 +808,7 @@ int main()
 
                 int left = randint(0, 2);
                 int up = randint(0, 2);
-                double speed = 0.3;
+                double speed = 15;
                 if(left == 0)
                     newspirit->velx = -speed;
                 else
@@ -822,7 +822,7 @@ int main()
             int gameupdatehz = 60;
             float targetsecondsperframe = 1.0f / (float)gameupdatehz;
             int lastcounter = SDL_GetPerformanceCounter();
-            secselapsed = 0;
+            deltatime = 0;
             bool running = true;
             while(running)
             {
@@ -859,7 +859,7 @@ int main()
                 int endcounter = SDL_GetPerformanceCounter();
                 int counterelapsed = endcounter - lastcounter;
 
-                secselapsed = counterelapsed / 1000000000.0;
+                deltatime = counterelapsed / 1000000000.0;
 
                 double msperframe = ((1000.0f * (double)counterelapsed) / (double)perfcountfrequency);
                 fps = round( (double)perfcountfrequency / (double)counterelapsed );
