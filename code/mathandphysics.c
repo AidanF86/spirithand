@@ -152,8 +152,6 @@ vectorfscreentogame(Camera cam, double x, double y)
     return posincam;
 }
 
-
-
 SDL_Rect
 boxtoscreen(Camera cam, double x, double y, double w, double h, enum spaces space)
 {

@@ -84,9 +84,10 @@ global_variable int spiritcount;
 global_variable Spirit spirits[MAXSPIRITS];
 global_variable SDL_Texture *spirittextures[2];
 
-#define MAXOBSTACLES 50
-global_variable int maxobstacles;
-global_variable Box obstacles[MAXOBSTACLES];
+bool **mainmap;
+int mapx;
+int mapy;
+double mapsquaresize;
 
 void advanceanimation(Animation *anim, double time)
 {
@@ -104,6 +105,21 @@ void advanceanimation(Animation *anim, double time)
             anim->currentframe = 0;
         }
     }
+}
+
+SDL_Texture *
+texturefromimage(SDL_Renderer *renderer, char *filename)
+{
+    SDL_Surface *surface = IMG_Load(filename);
+    if(surface == NULL)
+    {
+        printf("Cannot find image file %s\n", filename);
+        //SDL_Quit(); // TODO(aidan): should we really quit?
+        return NULL;
+    }
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+    return texture;
 }
 
 Spirit*
@@ -176,6 +192,39 @@ updatespirits()
 
     for(int i = 0; i < spiritcount; i++)
     {
+        for(int x = 0; x < mapx; x++)
+        {
+            for(int y = 0; y < mapy; y++)
+            {
+                int obstaclex = x*mapsquaresize + mapsquaresize/2.0;
+                int obstacley = y*mapsquaresize + mapsquaresize/2.0;
+                if(!mainmap[x][y])
+                {
+                    continue;
+                }
+                printf("Collision with an obstacle!\n");
+
+                if(spirit->x + spirit->size / 2.0 + spirit->velx > obstaclex - mapsquaresize / 2.0 &&
+                   spirit->x - spirit->size / 2.0 + spirit->velx < obstaclex + mapsquaresize / 2.0 &&
+                   spirit->y + spirit->size / 2.0 > obstacley - mapsquaresize / 2.0 &&
+                   spirit->y - spirit->size / 2.0 < obstacley + mapsquaresize / 2.0)
+                {
+                    velchanges[i][0] = -1;
+                }
+
+                if(spirit->y + spirit->size / 2.0 + spirit->vely > obstacley - mapsquaresize / 2.0 &&
+                   spirit->y - spirit->size / 2.0 + spirit->vely < obstacley + mapsquaresize / 2.0 &&
+                   spirit->x + spirit->size / 2.0 > obstaclex - mapsquaresize / 2.0 &&
+                   spirit->x - spirit->size / 2.0 < obstaclex + mapsquaresize / 2.0)
+                {
+                    velchanges[i][1] = -1;
+                }
+            }
+        }
+    }
+
+    for(int i = 0; i < spiritcount; i++)
+    {
         spirit = &(spirits[i]);
         spirit->velx *= velchanges[i][0];
         spirit->vely *= velchanges[i][1];
@@ -183,21 +232,6 @@ updatespirits()
         spirit->x += spirit->velx;
         spirit->y += spirit->vely;
     }
-}
-
-SDL_Texture *
-texturefromimage(SDL_Renderer *renderer, char *filename)
-{
-    SDL_Surface *surface = IMG_Load(filename);
-    if(surface == NULL)
-    {
-        printf("Cannot find image file %s\n", filename);
-        //SDL_Quit(); // TODO(aidan): should we really quit?
-        return NULL;
-    }
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-    return texture;
 }
 
 void
@@ -408,6 +442,30 @@ drawbox(Camera cam, double x, double y, double w, double h)
 }
 
 int
+drawmap(Camera cam, bool** map, int w, int h)
+{
+    SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 155);
+    for(int i = 0; i < w; i++)
+    {
+        for(int k = 0; k < h; k++)
+        {
+            if(map[i][k])
+            {
+                SDL_Rect rect = boxtoscreen(cam,
+                                            i*mapsquaresize,
+                                            k*mapsquaresize,
+                                            mapsquaresize,
+                                            mapsquaresize,
+                                            game);
+
+                SDL_RenderFillRect(cam.renderer,
+                                   &rect);
+            }
+        }
+    }
+}
+
+int
 drawworldgridaux(Camera cam, double gapsize, SDL_Color color)
 {
     color.a = color.a / 4;
@@ -448,7 +506,8 @@ drawworldgridaux(Camera cam, double gapsize, SDL_Color color)
     }
 }
 
-int drawworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
+int
+drawworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
 {
     if(reccount >= 7)
     {
@@ -532,6 +591,8 @@ render(Camera cam)
                     spirit->size);
         }
     }
+
+    drawmap(cam, mainmap, mapx, mapy);
     
     // render ui
     if(debugMenuEnabled)
@@ -669,7 +730,6 @@ int main()
     debug.worldgridcolor.a = 255;
     debug.worldgridgapsize = 20;
     debug.worldgrid = true;
-
     debugMenuEnabled = true;
 
     maincam.x = 0;
@@ -688,6 +748,19 @@ int main()
 
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
+
+    mapx = 10;
+    mapy = 10;
+    mapsquaresize = 10;
+    mainmap = (bool**)malloc(mapx*sizeof(bool*));
+    for(int i = 0; i < mapx; i++)
+    {
+        mainmap[i] = (bool*)malloc(mapy*sizeof(bool));
+        for(int a = 0; a < mapy; a++)
+        {
+            mainmap[i][a] = randint(0, 5) == 0;
+        }
+    }
 
     //spiritcount = 0;
     //Spirit *spirit1 = makespirit(-20, 0, 10, color_yellow);
@@ -792,6 +865,14 @@ int main()
         }
     }
 
+    // free memory
+    for(int i = 0; i < mapx; i++)
+    {
+        free(mainmap[i]);
+    }
+    free(mainmap);
+
+    return 0;
 }
 
 
