@@ -135,6 +135,13 @@ makespirit(double x, double y, double size, SDL_Color color)
     newspirit.y = y;
     newspirit.size = size;
     newspirit.color = color;
+    newspirit.anim.frames[0] = spirittextures[0];
+    newspirit.anim.frames[1] = spirittextures[1];
+    newspirit.anim.numframes = 2;
+    newspirit.anim.currentframe = randint(0, newspirit.anim.numframes);
+    newspirit.anim.frametime = 0.5;
+    newspirit.anim.timetillnext = randdouble(0, newspirit.anim.frametime);
+
     spirits[spiritcount] = newspirit;
     return &(spirits[spiritcount++]);
 }
@@ -153,6 +160,7 @@ updatespirits()
     {
         Spirit spirit = spirits[i];
         // handle collisions
+        /*
         if(spirit.x + spirit.size / 2 + spirit.velx > maincam.x + maincam.w / 2 ||
            spirit.x - spirit.size / 2 + spirit.velx < maincam.x - maincam.w / 2)
         {
@@ -163,6 +171,7 @@ updatespirits()
         {
             velchanges[i][1] = -1;
         }
+        */
 
         for(int a = 0; a < spiritcount; a++)
         {
@@ -173,12 +182,13 @@ updatespirits()
             }
 
             if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size))
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx))
             {
                 velchanges[i][0] = -1;
             }
+
             if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size))
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely))
             {
                 velchanges[i][1] = -1;
             }
@@ -188,17 +198,18 @@ updatespirits()
         {
             for(int y = 0; y < maph; y++)
             {
-                double obstaclex = x*mapsquaresize - mapsquaresize/2.0;
-                double obstacley = y*mapsquaresize - mapsquaresize/2.0;
+                double obstaclex = x*mapsquaresize;
+                double obstacley = y*mapsquaresize;
                 if(mainmap[x][y])
                 {
                     if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
-                                    obstaclex, obstacley, mapsquaresize, mapsquaresize))
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         velchanges[i][0] = -1;
+
                     }
                     if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
-                                    obstaclex, obstacley, mapsquaresize, mapsquaresize))
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         velchanges[i][1] = -1;
                     }
@@ -424,6 +435,22 @@ drawrect(Camera cam, double x, double y, double w, double h)
 {
     SDL_Rect rect = recttoscreen(cam, x, y, w, h, game);
     SDL_RenderDrawRect(cam.renderer, &rect);
+}
+
+Vectori
+getemptymapspace(bool** map)
+{
+    int count = 0;
+    Vectori vector;
+    do
+    {
+        vector.x = randint(1, mapw-1);
+        vector.y = randint(1, maph-1);
+    } while(map[vector.x][vector.y] && count < 10);
+    // TODO(aidan): implement a more reliable method
+    vector.x *= mapsquaresize;
+    vector.y *= mapsquaresize;
+    return vector;
 }
 
 int
@@ -717,8 +744,8 @@ int main()
     debug.worldgrid = true;
     debugMenuEnabled = true;
 
-    maincam.x = 0;
-    maincam.y = 0;
+    maincam.x = 45;
+    maincam.y = 45;
     maincam.w = 100;
     maincam.h = 100;
     maincam.wui = 100;
@@ -744,8 +771,13 @@ int main()
         for(int a = 0; a < maph; a++)
         {
             mainmap[i][a] = randint(0, 5) == 0;
+            if(i == 0 || i == mapw-1 || a == 0 || a == maph-1)
+            {
+                mainmap[i][a] = true;
+            }
         }
     }
+
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -771,14 +803,8 @@ int main()
 
             for(int i = 0; i < 10; i++)
             {
-                Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 5, color_orange);
-                newspirit->anim.frames[0] = spirittextures[0];
-                newspirit->anim.frames[1] = spirittextures[1];
-                newspirit->anim.numframes = 2;
-                newspirit->anim.currentframe = randint(0, newspirit->anim.numframes);
-                newspirit->anim.frametime = 0.5;
-                newspirit->anim.timetillnext = randdouble(0, newspirit->anim.frametime);
-
+                Vectori pos = getemptymapspace(mainmap);
+                Spirit *newspirit = makespirit(pos.x, pos.y, 8, color_orange);
 
                 int left = randint(0, 2);
                 int up = randint(0, 2);

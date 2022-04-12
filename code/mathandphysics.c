@@ -50,19 +50,21 @@ interpolatelinear(double amount, double a, double b)
 }
 
 bool
-willcollidex(double x1, double y1, double w1, double h1, double vel1, double x2, double y2, double w2, double h2)
+willcollidex(double x1, double y1, double w1, double h1, double vel1,
+             double x2, double y2, double w2, double h2, double vel2)
 {
-    return x1 + w1/2.0 + vel1 > x2 - w2/2.0 + vel1 &&
-           x1 - w1/2.0 + vel1 < x2 + w2/2.0 + vel1 &&
+    return x1 + w1/2.0 + vel1 > x2 - w2/2.0 + vel2 &&
+           x1 - w1/2.0 + vel1 < x2 + w2/2.0 + vel2 &&
            y1 + h1/2.0 > y2 - h2/2.0 &&
            y1 - h1/2.0 < y2 + h2/2.0;
 }
 
 bool
-willcollidey(double x1, double y1, double w1, double h1, double vel1, double x2, double y2, double w2, double h2)
+willcollidey(double x1, double y1, double w1, double h1, double vel1,
+             double x2, double y2, double w2, double h2, double vel2)
 {
-    return y1 + h1/2.0 + vel1 > y2 - h2/2.0 + vel1 &&
-           y1 - h1/2.0 + vel1 < y2 + h2/2.0 + vel1 &&
+    return y1 + h1/2.0 + vel1 > y2 - h2/2.0 + vel2 &&
+           y1 - h1/2.0 + vel1 < y2 + h2/2.0 + vel2 &&
            x1 + w1/2.0 > x2 - w2/2.0 &&
            x1 - w1/2.0 < x2 + w2/2.0;
 }
