@@ -85,8 +85,8 @@ global_variable Spirit spirits[MAXSPIRITS];
 global_variable SDL_Texture *spirittextures[2];
 
 bool **mainmap;
-int mapx;
-int mapy;
+int mapw;
+int maph;
 double mapsquaresize;
 
 void advanceanimation(Animation *anim, double time)
@@ -142,7 +142,6 @@ makespirit(double x, double y, double size, SDL_Color color)
 int
 updatespirits()
 {
-    Spirit* spirit;
     int velchanges [spiritcount][2];
     for(int i = 0; i < spiritcount; i++)
     {
@@ -152,80 +151,66 @@ updatespirits()
 
     for(int i = 0; i < spiritcount; i++)
     {
-        spirit = &(spirits[i]);
+        Spirit spirit = spirits[i];
         // handle collisions
-        if(spirit->x + spirit->size / 2 + spirit->velx > maincam.x + maincam.w / 2 ||
-           spirit->x - spirit->size / 2 + spirit->velx < maincam.x - maincam.w / 2)
+        if(spirit.x + spirit.size / 2 + spirit.velx > maincam.x + maincam.w / 2 ||
+           spirit.x - spirit.size / 2 + spirit.velx < maincam.x - maincam.w / 2)
         {
-            spirit->velx *= -1;
+            velchanges[i][0] = -1;
         }
-        if(spirit->y + spirit->size / 2 + spirit->vely > maincam.y + maincam.h / 2 ||
-           spirit->y - spirit->size / 2 + spirit->vely < maincam.y - maincam.h / 2)
+        if(spirit.y + spirit.size / 2 + spirit.vely > maincam.y + maincam.h / 2 ||
+           spirit.y - spirit.size / 2 + spirit.vely < maincam.y - maincam.h / 2)
         {
-            spirit->vely *= -1;
+            velchanges[i][1] = -1;
         }
-
 
         for(int a = 0; a < spiritcount; a++)
         {
-            Spirit* otherspirit = &(spirits[a]);
+            Spirit spirit2 = spirits[a];
             if(i == a)
+            {
                 continue;
+            }
 
-            if(spirit->x + spirit->size / 2.0 + spirit->velx > otherspirit->x - otherspirit->size / 2.0 + otherspirit->velx &&
-               spirit->x - spirit->size / 2.0 + spirit->velx < otherspirit->x + otherspirit->size / 2.0 + otherspirit->velx &&
-               spirit->y + spirit->size / 2.0 > otherspirit->y - otherspirit->size / 2.0 &&
-               spirit->y - spirit->size / 2.0 < otherspirit->y + otherspirit->size / 2.0)
+            if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size))
             {
                 velchanges[i][0] = -1;
             }
-
-            if(spirit->y + spirit->size / 2.0 + spirit->vely > otherspirit->y - otherspirit->size / 2.0 + otherspirit->vely &&
-               spirit->y - spirit->size / 2.0 + spirit->vely < otherspirit->y + otherspirit->size / 2.0 + otherspirit->vely &&
-               spirit->x + spirit->size / 2.0 > otherspirit->x - otherspirit->size / 2.0 &&
-               spirit->x - spirit->size / 2.0 < otherspirit->x + otherspirit->size / 2.0)
+            if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
+                            spirit2.x, spirit2.y, spirit2.size, spirit2.size))
             {
                 velchanges[i][1] = -1;
             }
         }
-    }
 
-    for(int i = 0; i < spiritcount; i++)
-    {
-        for(int x = 0; x < mapx; x++)
+        for(int x = 0; x < mapw; x++)
         {
-            for(int y = 0; y < mapy; y++)
+            for(int y = 0; y < maph; y++)
             {
-                int obstaclex = x*mapsquaresize + mapsquaresize/2.0;
-                int obstacley = y*mapsquaresize + mapsquaresize/2.0;
-                if(!mainmap[x][y])
+                double obstaclex = x*mapsquaresize - mapsquaresize/2.0;
+                double obstacley = y*mapsquaresize - mapsquaresize/2.0;
+                if(mainmap[x][y])
                 {
-                    continue;
-                }
-                printf("Collision with an obstacle!\n");
-
-                if(spirit->x + spirit->size / 2.0 + spirit->velx > obstaclex - mapsquaresize / 2.0 &&
-                   spirit->x - spirit->size / 2.0 + spirit->velx < obstaclex + mapsquaresize / 2.0 &&
-                   spirit->y + spirit->size / 2.0 > obstacley - mapsquaresize / 2.0 &&
-                   spirit->y - spirit->size / 2.0 < obstacley + mapsquaresize / 2.0)
-                {
-                    velchanges[i][0] = -1;
-                }
-
-                if(spirit->y + spirit->size / 2.0 + spirit->vely > obstacley - mapsquaresize / 2.0 &&
-                   spirit->y - spirit->size / 2.0 + spirit->vely < obstacley + mapsquaresize / 2.0 &&
-                   spirit->x + spirit->size / 2.0 > obstaclex - mapsquaresize / 2.0 &&
-                   spirit->x - spirit->size / 2.0 < obstaclex + mapsquaresize / 2.0)
-                {
-                    velchanges[i][1] = -1;
+                    if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize))
+                    {
+                        velchanges[i][0] = -1;
+                    }
+                    if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize))
+                    {
+                        velchanges[i][1] = -1;
+                    }
                 }
             }
         }
+
     }
 
     for(int i = 0; i < spiritcount; i++)
     {
-        spirit = &(spirits[i]);
+        Spirit *spirit = &(spirits[i]);
         spirit->velx *= velchanges[i][0];
         spirit->vely *= velchanges[i][1];
 
@@ -272,7 +257,7 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, U
     if(ui)
     {
         //printf("drawtext:ui (%d, %d, %d)", x, y, h);
-        SDL_Rect screenrect = boxtoscreen(cam, x, y, 0, h, ui);
+        SDL_Rect screenrect = recttoscreen(cam, x, y, 0, h, ui);
         x = screenrect.x;
         y = screenrect.y;
         h = screenrect.h;
@@ -286,9 +271,9 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, U
         rect.w = (h * FONTASPECTRATIO);
         rect.h = h;
         //if(ui)
-        //    rect = boxuitoscreen(cam, rect.x, rect.y, rect.w, rect.h);
+        //    rect = rectuitoscreen(cam, rect.x, rect.y, rect.w, rect.h);
         //else
-        //    rect = boxgametoscreen(cam, rect.x, rect.y, rect.w, rect.h);
+        //    rect = rectgametoscreen(cam, rect.x, rect.y, rect.w, rect.h);
 
         // TODO(aidan): definitely inefficient, should use glyph caching
         SDL_Surface *glyphcache = TTF_RenderGlyph_Solid(font, text[i], color);
@@ -317,11 +302,11 @@ drawbutton(Camera cam, UIDocker *docker, char *text, double h)
             x += docker->totaloffset * docker->offsetscalar;
     }
 
-    SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
-    if(! (mousex < rectscreen.x ||
-          mousex > rectscreen.x + rectscreen.w ||
-          mousey < rectscreen.y ||
-          mousey > rectscreen.y + rectscreen.h))
+    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, ui);
+    if(!(mousex < rectscreen.x ||
+         mousex > rectscreen.x + rectscreen.w ||
+         mousey < rectscreen.y ||
+         mousey > rectscreen.y + rectscreen.h))
     {
         beinghovered = true;
         if(mouseleftdown)
@@ -379,7 +364,7 @@ drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool chec
         x += docker->totaloffset * docker->offsetscalar;
 
 
-    SDL_Rect rectscreen = boxtoscreen(cam, x, y, w, h, ui);
+    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, ui);
     if(! (mousex < rectscreen.x ||
           mousex > rectscreen.x + rectscreen.w ||
           mousey < rectscreen.y ||
@@ -410,7 +395,7 @@ drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool chec
         SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
     else
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    //render check box
+    //render check rect
     if(checked)
     {
         SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
@@ -435,9 +420,9 @@ drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool chec
 }
 
 int
-drawbox(Camera cam, double x, double y, double w, double h)
+drawrect(Camera cam, double x, double y, double w, double h)
 {
-    SDL_Rect rect = boxtoscreen(cam, x, y, w, h, game);
+    SDL_Rect rect = recttoscreen(cam, x, y, w, h, game);
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
@@ -445,18 +430,18 @@ int
 drawmap(Camera cam, bool** map, int w, int h)
 {
     SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 155);
-    for(int i = 0; i < w; i++)
+    for(int x = 0; x < w; x++)
     {
-        for(int k = 0; k < h; k++)
+        for(int y = 0; y < h; y++)
         {
-            if(map[i][k])
+            if(map[x][y])
             {
-                SDL_Rect rect = boxtoscreen(cam,
-                                            i*mapsquaresize,
-                                            k*mapsquaresize,
-                                            mapsquaresize,
-                                            mapsquaresize,
-                                            game);
+                SDL_Rect rect = recttoscreen(cam,
+                                             x*mapsquaresize - mapsquaresize/2.0,
+                                             y*mapsquaresize - mapsquaresize/2.0,
+                                             mapsquaresize,
+                                             mapsquaresize,
+                                             game);
 
                 SDL_RenderFillRect(cam.renderer,
                                    &rect);
@@ -546,7 +531,7 @@ render(Camera cam)
     SDL_SetRenderDrawColor(cam.renderer, 155, 155, 155, 255);
     SDL_RenderClear(cam.renderer);
         // draw background canvas (to make sure of the size)
-    //SDL_Rect canvasrect = boxgametoscreen(cam,
+    //SDL_Rect canvasrect = rectgametoscreen(cam,
     //                                    -cam.w / 2 + cam.x,
     //                                    -cam.h / 2 + cam.y,
     //                                    cam.w,
@@ -563,7 +548,7 @@ render(Camera cam)
     for(int i = 0; i < spiritcount; i++)
     {
         spirit = &(spirits[i]);
-        SDL_Rect spiritrect = boxtoscreen(cam,
+        SDL_Rect spiritrect = recttoscreen(cam,
                                           spirit->x - spirit->size / 2,
                                           spirit->y - spirit->size / 2,
                                           spirit->size,
@@ -584,7 +569,7 @@ render(Camera cam)
                                    spirit->color.g,
                                    spirit->color.b,
                                    spirit->color.a);
-            drawbox(cam,
+            drawrect(cam,
                     spirit->x - spirit->size / 2,
                     spirit->y - spirit->size / 2,
                     spirit->size,
@@ -592,7 +577,7 @@ render(Camera cam)
         }
     }
 
-    drawmap(cam, mainmap, mapx, mapy);
+    drawmap(cam, mainmap, mapw, maph);
     
     // render ui
     if(debugMenuEnabled)
@@ -749,26 +734,18 @@ int main()
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
 
-    mapx = 10;
-    mapy = 10;
+    mapw = 10;
+    maph = 10;
     mapsquaresize = 10;
-    mainmap = (bool**)malloc(mapx*sizeof(bool*));
-    for(int i = 0; i < mapx; i++)
+    mainmap = (bool**)malloc(mapw*sizeof(bool*));
+    for(int i = 0; i < mapw; i++)
     {
-        mainmap[i] = (bool*)malloc(mapy*sizeof(bool));
-        for(int a = 0; a < mapy; a++)
+        mainmap[i] = (bool*)malloc(maph*sizeof(bool));
+        for(int a = 0; a < maph; a++)
         {
             mainmap[i][a] = randint(0, 5) == 0;
         }
     }
-
-    //spiritcount = 0;
-    //Spirit *spirit1 = makespirit(-20, 0, 10, color_yellow);
-    //spirit1->velx = 0.1;
-    //spirit1->vely = 0;
-    //Spirit *spirit2 = makespirit(20, 0, 10, color_yellow);
-    //spirit2->velx = -0.1;
-    //spirit2->vely = 0;
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -794,7 +771,7 @@ int main()
 
             for(int i = 0; i < 10; i++)
             {
-                Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 10, color_orange);
+                Spirit *newspirit = makespirit(randdouble(-40, 40), randdouble(-40, 40), 5, color_orange);
                 newspirit->anim.frames[0] = spirittextures[0];
                 newspirit->anim.frames[1] = spirittextures[1];
                 newspirit->anim.numframes = 2;
@@ -866,7 +843,7 @@ int main()
     }
 
     // free memory
-    for(int i = 0; i < mapx; i++)
+    for(int i = 0; i < mapw; i++)
     {
         free(mainmap[i]);
     }

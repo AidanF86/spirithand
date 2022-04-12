@@ -11,12 +11,6 @@ Vectori {
 } Vectori;
 
 typedef struct
-Box {
-    double x; double y;
-    double w; double h;
-} Box;
-
-typedef struct
 Camera {
     double x; double y;
     double w; double h; // in game units
@@ -56,61 +50,21 @@ interpolatelinear(double amount, double a, double b)
 }
 
 bool
-boxescolliding(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
+willcollidex(double x1, double y1, double w1, double h1, double vel1, double x2, double y2, double w2, double h2)
 {
-    if(x1 < x2 + w2 &&
-       x1 + w1 > x2 &&
-       y1 < y2 + h2 &&
-       h1 + y1 > y2)
-        return true;
-    return false;
+    return x1 + w1/2.0 + vel1 > x2 - w2/2.0 + vel1 &&
+           x1 - w1/2.0 + vel1 < x2 + w2/2.0 + vel1 &&
+           y1 + h1/2.0 > y2 - h2/2.0 &&
+           y1 - h1/2.0 < y2 + h2/2.0;
 }
 
 bool
-boxtotallyinbox(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
+willcollidey(double x1, double y1, double w1, double h1, double vel1, double x2, double y2, double w2, double h2)
 {
-    if(x1 < x2 ||
-       x1 + w1 > x2 + w2 ||
-       y1 < y2 ||
-       y1 + h1 > y2 + h2)
-        return false;
-    return true;
-}
-
-Vectorf
-boxdifference(double x1, double y1, double w1, double h1, double x2, double y2, double w2, double h2)
-{
-    Vectorf diff;
-    diff.x = x1 + w1 - x2;
-    diff.x = y1 + h1 - y2;
-    return diff;
-}
-
-int
-pointinbox(double xpt, double ypt, double xbox, double ybox, double wbox, double hbox)
-{
-    if(xpt < xbox ||
-       xpt > xbox + wbox ||
-       ypt < ybox ||
-       ypt > ybox + hbox)
-        return 0;
-    return 1;
-}
-
-int
-boxandcirclecolliding(double x1, double y1, double radius, double x2, double y2, double w, double h)
-{
-        // get closest point to center of box
-    Vectorf boxcenter;
-    boxcenter.x = x2 + w / 2;
-    boxcenter.y = y2 + h / 2;
-
-    double angle = atan( fabs(boxcenter.x - x1) / fabs(boxcenter.y - y1) );
-
-    double pointx = sin(angle) / radius;
-    double pointy = cos(angle) / radius;
-
-    return pointinbox(pointx, pointy, x2, y2, w, h);
+    return y1 + h1/2.0 + vel1 > y2 - h2/2.0 + vel1 &&
+           y1 - h1/2.0 + vel1 < y2 + h2/2.0 + vel1 &&
+           x1 + w1/2.0 > x2 - w2/2.0 &&
+           x1 - w1/2.0 < x2 + w2/2.0;
 }
 
 Vectori
@@ -153,7 +107,7 @@ vectorfscreentogame(Camera cam, double x, double y)
 }
 
 SDL_Rect
-boxtoscreen(Camera cam, double x, double y, double w, double h, enum spaces space)
+recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces space)
 {
     double spacex;
     double spacey;
@@ -208,16 +162,16 @@ boxtoscreen(Camera cam, double x, double y, double w, double h, enum spaces spac
     return rectincam;
 }
 
-    // converts the camera bounds to a Box
-Box
-camtobox(Camera cam)
+    // converts the camera bounds to a SDL_Rect
+SDL_Rect
+camtorect(Camera cam)
 {
-    Box box;
-    box.x = cam.x - cam.w / 2;
-    box.y = cam.y - cam.h / 2;
-    box.w = cam.w;
-    box.h = cam.h;
-    return box;
+    SDL_Rect rect;
+    rect.x = cam.x - cam.w / 2;
+    rect.y = cam.y - cam.h / 2;
+    rect.w = cam.w;
+    rect.h = cam.h;
+    return rect;
 }
 
 int drawsidebars(Camera cam)
