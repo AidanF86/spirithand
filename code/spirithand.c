@@ -318,7 +318,8 @@ drawparticles(Camera cam, ParticleSystem *ps)
         SDL_Point center;
         center.x = rect.x;
         center.y = rect.y;
-
+        SDL_SetTextureBlendMode(ps->particles[i].texture,
+                                SDL_BLENDMODE_ADD);
         SDL_RenderCopyEx(cam.renderer,
                          ps->particles[i].texture,
                          NULL,
