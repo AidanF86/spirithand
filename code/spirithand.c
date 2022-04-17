@@ -64,11 +64,15 @@ Particle {
     double angle;
     double angvel;
     double timeleft;
-    SDL_Texture *texture;  // TODO(aidan): maybe change this to an animation
+    double alpha;
+    double delalpha;
+    bool diewhensmall;
+    Animation anim;
 } Particle;
-SDL_Texture *particle1texture;
-
 Particle spirittrailparticle;
+
+SDL_Texture *particle1textures[1];
+Animation particle1anim;
 
 #define MAX_PARTICLES 1000
 typedef struct
@@ -277,17 +281,29 @@ updateparticles(ParticleSystem *ps)
 {
     for(int i = 0; i < ps->numparticles; i++)
     {
-        ps->particles[i].x += ps->particles[i].velx;
-        ps->particles[i].y += ps->particles[i].vely;
-        ps->particles[i].w += ps->particles[i].delw;
-        ps->particles[i].h += ps->particles[i].delh;
-        ps->particles[i].angle += ps->particles[i].angvel;
+        ps->particles[i].x += ps->particles[i].velx * deltatime;
+        ps->particles[i].y += ps->particles[i].vely * deltatime;
+        ps->particles[i].w += ps->particles[i].delw * deltatime;
+        ps->particles[i].h += ps->particles[i].delh * deltatime;
+        ps->particles[i].angle += ps->particles[i].angvel * deltatime;
         ps->particles[i].timeleft -= deltatime;
-        
-        if(ps->particles[i].timeleft <= 0)
+        advanceanimation(&(ps->particles[i].anim), deltatime);
+
+        if(ps->particles[i].diewhensmall)
         {
-            ps->particles[i] = ps->particles[ps->numparticles - 1];
-            ps->numparticles -= 1;
+            if(ps->particles[i].w <= 0 || ps->particles[i].h <= 0)
+            {
+                ps->particles[i] = ps->particles[ps->numparticles - 1];
+                ps->numparticles -= 1;
+            }
+        }
+        else
+        {
+            if(ps->particles[i].timeleft <= 0)
+            {
+                ps->particles[i] = ps->particles[ps->numparticles - 1];
+                ps->numparticles -= 1;
+            }
         }
     }
 }
@@ -318,10 +334,10 @@ drawparticles(Camera cam, ParticleSystem *ps)
         SDL_Point center;
         center.x = rect.x;
         center.y = rect.y;
-        SDL_SetTextureBlendMode(ps->particles[i].texture,
+        SDL_SetTextureBlendMode(ps->particles[i].anim.frames[ps->particles[i].anim.currentframe],
                                 SDL_BLENDMODE_ADD);
         SDL_RenderCopyEx(cam.renderer,
-                         ps->particles[i].texture,
+                         ps->particles[i].anim.frames[ps->particles[i].anim.currentframe],
                          NULL,
                          &rect,
                          ps->particles[i].angle,
@@ -898,7 +914,13 @@ int main()
             // load textures
             spirittextures[0] = texturefromimage(renderer, "resources/graphics/spirit0.png");
             spirittextures[1] = texturefromimage(renderer, "resources/graphics/spirit1.png");
-            particle1texture = texturefromimage(renderer, "resources/graphics/particle1.png");
+            particle1textures[0] = texturefromimage(renderer, "resources/graphics/particle1.png");
+
+            particle1anim.frames[0] = particle1textures[0];
+            particle1anim.numframes = 1;
+            particle1anim.currentframe = 0;
+            particle1anim.frametime = 0.5;
+            particle1anim.timetillnext = particle1anim.frametime;
 
             mainps.numparticles = 0;
             spirittrailparticle.x = 0;
@@ -907,12 +929,13 @@ int main()
             spirittrailparticle.vely = 0;
             spirittrailparticle.w = 10;
             spirittrailparticle.h = 10;
-            spirittrailparticle.delw = -0.1;
-            spirittrailparticle.delh = -0.1;
+            spirittrailparticle.delw = -6.5;
+            spirittrailparticle.delh = -6.5;
             spirittrailparticle.angle = 45;
             spirittrailparticle.angvel = 1;
-            spirittrailparticle.timeleft = 1.5;
-            spirittrailparticle.texture = particle1texture;
+            spirittrailparticle.timeleft = 5;
+            spirittrailparticle.diewhensmall = true;
+            spirittrailparticle.anim = particle1anim;
 
             for(int i = 0; i < 10; i++)
             {
@@ -933,7 +956,7 @@ int main()
                     newspirit->vely = speed;
             }
 
-            int gameupdatehz = 60;
+            int gameupdatehz = 144;
             float targetsecondsperframe = 1.0f / (float)gameupdatehz;
             int lastcounter = SDL_GetPerformanceCounter();
             deltatime = 0;
