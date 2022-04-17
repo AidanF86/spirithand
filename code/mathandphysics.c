@@ -135,9 +135,9 @@ recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces spa
         // is taller
         double screentocamratio = (double)cam.wres / (double)spacew;
         double yoffset = (cam.hres - (screentocamratio * spaceh)) / 2;
-        rectincam.y = (y - spacey + spaceh / 2) * screentocamratio;
+        rectincam.y = (y - spacey + spaceh / 2.0) * screentocamratio;
         rectincam.y += yoffset;
-        rectincam.x = (x - spacex + spacew / 2) / spacew * cam.wres;
+        rectincam.x = (x - spacex + spacew / 2.0) / spacew * cam.wres;
         rectincam.h = h * screentocamratio;
         rectincam.w = w / spacew * cam.wres;
     }
@@ -146,9 +146,9 @@ recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces spa
         // is longer
         double screentocamratio = (double)cam.hres / (double)spaceh;
         double xoffset = (cam.wres - (screentocamratio * spacew)) / 2;
-        rectincam.x = (x - spacex + spacew / 2) * screentocamratio;
+        rectincam.x = (x - spacex + spacew / 2.0) * screentocamratio;
         rectincam.x += xoffset;
-        rectincam.y = (y - spacey + spaceh / 2) / spaceh * cam.hres;
+        rectincam.y = (y - spacey + spaceh / 2.0) / spaceh * cam.hres;
         rectincam.w = w * screentocamratio;
         rectincam.h = h / spaceh * cam.hres;
     }

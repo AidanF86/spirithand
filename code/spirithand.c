@@ -55,11 +55,36 @@ Animation {
     double timetillnext;
 } Animation;
 
+typedef struct 
+Particle {
+    double x, y;
+    double velx, vely;
+    double w, h;
+    double delw, delh;
+    double angle;
+    double angvel;
+    double timeleft;
+    SDL_Texture *texture;  // TODO(aidan): maybe change this to an animation
+} Particle;
+SDL_Texture *particle1texture;
+
+Particle spirittrailparticle;
+
+#define MAX_PARTICLES 1000
+typedef struct
+ParticleSystem {
+    Particle particles[MAX_PARTICLES];
+    int numparticles;
+} ParticleSystem;
+ParticleSystem mainps;
+
 typedef struct
 Spirit {
     double x; double y;
     double velx; double vely;
     double size;
+    double timebetweenparticles;
+    double timetonextparticle;
     SDL_Color color;
     Animation anim;
 } Spirit;
@@ -224,9 +249,17 @@ updatespirits()
         Spirit *spirit = &(spirits[i]);
         spirit->velx *= velchanges[i][0];
         spirit->vely *= velchanges[i][1];
-
         spirit->x += spirit->velx * deltatime;
         spirit->y += spirit->vely * deltatime;
+        spirit->timetonextparticle -= deltatime;
+        if(spirit->timetonextparticle <= 0)
+        {
+            spirit->timetonextparticle = spirit->timebetweenparticles;
+            Particle particle = spirittrailparticle;
+            particle.x = spirit->x;
+            particle.y = spirit->y;
+            addparticle(&mainps, particle);
+        }
     }
 }
 
@@ -239,7 +272,64 @@ loadfonts()
         printf("Font could not be loaded!\n");
 }
 
-    // returns the size
+void
+updateparticles(ParticleSystem *ps)
+{
+    for(int i = 0; i < ps->numparticles; i++)
+    {
+        ps->particles[i].x += ps->particles[i].velx;
+        ps->particles[i].y += ps->particles[i].vely;
+        ps->particles[i].w += ps->particles[i].delw;
+        ps->particles[i].h += ps->particles[i].delh;
+        ps->particles[i].angle += ps->particles[i].angvel;
+        ps->particles[i].timeleft -= deltatime;
+        
+        if(ps->particles[i].timeleft <= 0)
+        {
+            ps->particles[i] = ps->particles[ps->numparticles - 1];
+            ps->numparticles -= 1;
+        }
+    }
+}
+
+int addparticle(ParticleSystem *ps, Particle particle)
+{
+    if(ps->numparticles == MAX_PARTICLES)
+    {
+        printf("ERROR(addparticle): Max number of particles reached!\n");
+        return 1;
+    }
+    ps->particles[ps->numparticles] = particle;
+    ps->numparticles++;
+    return 0;
+}
+
+void
+drawparticles(Camera cam, ParticleSystem *ps)
+{
+    for(int i = 0; i < ps->numparticles; i++)
+    {
+        SDL_Rect rect = recttoscreen(cam,
+                                     ps->particles[i].x - ps->particles[i].w/2,
+                                     ps->particles[i].y - ps->particles[i].h/2,
+                                     ps->particles[i].w,
+                                     ps->particles[i].h,
+                                     game);
+        SDL_Point center;
+        center.x = rect.x;
+        center.y = rect.y;
+
+        SDL_RenderCopyEx(cam.renderer,
+                         ps->particles[i].texture,
+                         NULL,
+                         &rect,
+                         ps->particles[i].angle,
+                         NULL,
+                         //&center,
+                         SDL_FLIP_NONE);
+    }
+}
+
 int
 drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, UIDocker *docker)
 {
@@ -293,7 +383,6 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, U
         SDL_FreeSurface(glyphcache);
         SDL_DestroyTexture(glyph);
     }
-
 }
 
 bool
@@ -571,9 +660,16 @@ render(Camera cam)
         drawworldgrid(cam, debug.worldgridgapsize, debug.worldgridcolor, 0);
     }
 
+    SDL_SetRenderDrawBlendMode(cam.renderer,
+                               SDL_BLENDMODE_ADD);
+    drawparticles(cam, &mainps);
+    SDL_SetRenderDrawBlendMode(cam.renderer,
+                               SDL_BLENDMODE_BLEND);
     Spirit *spirit;
     for(int i = 0; i < spiritcount; i++)
     {
+        SDL_SetRenderDrawBlendMode(cam.renderer,
+                                   SDL_BLENDMODE_ADD);
         spirit = &(spirits[i]);
         SDL_Rect spiritrect = recttoscreen(cam,
                                           spirit->x - spirit->size / 2,
@@ -588,14 +684,16 @@ render(Camera cam)
                        NULL,
                        &spiritrect);
 
+        SDL_SetRenderDrawBlendMode(cam.renderer,
+                                   SDL_BLENDMODE_BLEND);
         // draw colliders if debug option enabled
         if(debug.colliders)
         {
             SDL_SetRenderDrawColor(cam.renderer,
-                                   spirit->color.r,
-                                   spirit->color.g,
-                                   spirit->color.b,
-                                   spirit->color.a);
+                                   color_yellow.r,
+                                   color_yellow.g,
+                                   color_yellow.b,
+                                   color_yellow.a);
             drawrect(cam,
                     spirit->x - spirit->size / 2,
                     spirit->y - spirit->size / 2,
@@ -778,7 +876,6 @@ int main()
         }
     }
 
-
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
                                           SDL_WINDOWPOS_UNDEFINED,
@@ -800,12 +897,28 @@ int main()
             // load textures
             spirittextures[0] = texturefromimage(renderer, "resources/graphics/spirit0.png");
             spirittextures[1] = texturefromimage(renderer, "resources/graphics/spirit1.png");
+            particle1texture = texturefromimage(renderer, "resources/graphics/particle1.png");
+
+            mainps.numparticles = 0;
+            spirittrailparticle.x = 0;
+            spirittrailparticle.y = 0;
+            spirittrailparticle.velx = 0;
+            spirittrailparticle.vely = 0;
+            spirittrailparticle.w = 10;
+            spirittrailparticle.h = 10;
+            spirittrailparticle.delw = -0.1;
+            spirittrailparticle.delh = -0.1;
+            spirittrailparticle.angle = 45;
+            spirittrailparticle.angvel = 1;
+            spirittrailparticle.timeleft = 1.5;
+            spirittrailparticle.texture = particle1texture;
 
             for(int i = 0; i < 10; i++)
             {
                 Vectori pos = getemptymapspace(mainmap);
                 Spirit *newspirit = makespirit(pos.x, pos.y, 8, color_orange);
-
+                newspirit->timebetweenparticles = 0.1;
+                newspirit->timetonextparticle = 0;
                 int left = randint(0, 2);
                 int up = randint(0, 2);
                 double speed = 15;
@@ -838,6 +951,7 @@ int main()
 
                 updateplayermovement();
                 updatespirits();
+                updateparticles(&mainps);
                 render(maincam);
 
                 int perfcountfrequency = SDL_GetPerformanceFrequency();
