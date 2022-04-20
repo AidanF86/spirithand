@@ -101,6 +101,8 @@ double playerx;
 double playery;
 double playervelx;
 double playervely;
+double playermaxspeed = 50;
+double playerdrag = 3;
 double playersize = 6;
 enum directions {dir_up, dir_down, dir_left, dir_right};
 enum directions playerdir;
@@ -746,7 +748,7 @@ render(Camera cam)
         }
     }
 
-    // render player
+    // draw player
     SDL_Rect playerrect = recttoscreen(cam,
                                        playerx - playersize/2.0,
                                        playery - playersize/2.0,
@@ -755,8 +757,13 @@ render(Camera cam)
                                        space_game);
     SDL_SetRenderDrawColor(cam.renderer, 255, 0, 255, 255);
     SDL_RenderFillRect(cam.renderer, &playerrect);
+    SDL_RenderDrawLine(cam.renderer,
+                       playerrect.x + playerrect.w / 2,
+                       playerrect.y + playerrect.h / 2,
+                       playerrect.x + playerrect.w / 2 + playervelx,
+                       playerrect.y + playerrect.h / 2 + playervely);
     
-    // render ui
+    // draw ui
     if(debugMenuEnabled)
     {
         UIDocker debugdocker;
@@ -764,7 +771,7 @@ render(Camera cam)
         debugdocker.y = cam.hui*-1/2;
         debugdocker.totaloffset = 0;
         debugdocker.vertical = false;
-        debugdocker.offsetscalar = 1;
+        debugdocker.offsetscalar = 1.1;
         if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
         {
             debug.worldgrid = !debug.worldgrid;
@@ -804,7 +811,7 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 5000;
+    double movespeed = 2000;
     double zoomspeed = 0.5;
     Vectorf poschange = {0};
     double zoomchange = 0;
@@ -823,8 +830,8 @@ updateplayermovement()
         
     if(debug.freecam)
     {
-        poschange.x /= 60;
-        poschange.y /= 60;
+        poschange.x /= 20;
+        poschange.y /= 20;
         maincam.w += zoomchange * maincam.w;
         maincam.h += zoomchange * maincam.h;
         maincam.x += poschange.x * maincam.w * deltatime;
@@ -842,8 +849,57 @@ updateplayermovement()
     {
         bool freezex = false;
         bool freezey = false;
-        playervelx = poschange.x;
-        playervely = poschange.y;
+        playervelx += poschange.x;
+        playervely += poschange.y;
+        if(playervelx > 0)
+        {
+            playervelx -= playerdrag;
+            if(playervelx < 0)
+            {
+                playervelx = 0;
+            }
+        }
+        else if(playervelx < 0)
+        {
+            playervelx += playerdrag;
+            if(playervelx > 0)
+            {
+                playervelx = 0;
+            }
+        }
+        if(playervely > 0)
+        {
+            playervely -= playerdrag;
+            if(playervely < 0)
+            {
+                playervely = 0;
+            }
+        }
+        else if(playervely < 0)
+        {
+            playervely += playerdrag;
+            if(playervely > 0)
+            {
+                playervely = 0;
+            }
+        }
+
+        if(playervelx > playermaxspeed)
+        {
+            playervelx = playermaxspeed;
+        }
+        else if (playervelx < -playermaxspeed)
+        {
+            playervelx = -playermaxspeed;
+        }
+        if(playervely > playermaxspeed)
+        {
+            playervely = playermaxspeed;
+        }
+        else if (playervely < -playermaxspeed)
+        {
+            playervely = -playermaxspeed;
+        }
         for(int x = 0; x < mapw; x++)
         {
             for(int y = 0; y < maph; y++)
@@ -873,10 +929,21 @@ updateplayermovement()
                 }
             }
         }
-        if(!freezex)
-            playerx += playervelx * deltatime;
-        if(!freezey)
-            playery += playervely * deltatime;
+        if(freezex)
+        {
+            playervelx = 0;
+        }
+        if(freezey)
+        {
+            playervely = 0;
+        }
+        playerx += playervelx * deltatime;
+        playery += playervely * deltatime;
+
+        double lastcamx = maincam.x;
+        double lastcamy = maincam.y;
+        maincam.x = interpolatelinear(maincam.x, playerx, 0.03);
+        maincam.y = interpolatelinear(maincam.y, playery, 0.03);
     }
 }
 
@@ -923,7 +990,7 @@ int main()
 
     mapw = 10;
     maph = 10;
-    mapsquaresize = 17;
+    mapsquaresize = 25;
     mainmap = (bool**)malloc(mapw*sizeof(bool*));
     for(int i = 0; i < mapw; i++)
     {

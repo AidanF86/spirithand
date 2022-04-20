@@ -38,15 +38,9 @@ double randdouble(double min, double max)
 
     // amount should be between 0.0 and 1.0
 double
-interpolatelinear(double amount, double a, double b)
+interpolatelinear(double a, double b, double amount)
 {
-    int result = amount;
-    result *= abs(a - b);
-    if(a > b)
-        result += b;
-    else
-        result += a;
-    return result;
+    return a + amount * (b-a);
 }
 
 bool
