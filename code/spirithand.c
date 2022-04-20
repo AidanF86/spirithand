@@ -101,9 +101,9 @@ double playerx;
 double playery;
 double playervelx;
 double playervely;
-double playermaxspeed = 60;
+double playermaxspeed = 90;
 double playeracceleration = 2000;
-double playerdrag = 3;
+double playerdrag = 7;
 double playerw = 18 / 1.4;
 double playerh = 25 / 1.4;
 #define PLAYERANIMATIONCOUNT 4
@@ -882,6 +882,8 @@ updateplayermovement()
     }
     else
     {
+        // ABANDON ALL HOPE, YE WHO ENTER HERE,
+        // FOR THIS IS THE CODE OF DEAD MEN
         poschange.x *= playeracceleration;
         poschange.y *= playeracceleration;
         bool freezex = false;
@@ -931,15 +933,26 @@ updateplayermovement()
         else if (playervely < -playermaxspeed)
             playervely = -playermaxspeed;
 
-        // Nowmawize vectow >w<
-        double length = sqrt((playervelx*playervelx) + (playervely*playervely));
-        printf("playervel length: %f\n", length);
-        if(length != 0)
+        // Nowmawize vectow  > w <
+        if(poschange.x != 0 || poschange.y != 0)
         {
-            playervelx = playervelx / length;
-            playervely = playervely / length;
-            playervelx *= playermaxspeed;
-            playervely *= playermaxspeed;
+            double length = sqrt((playervelx*playervelx) + (playervely*playervely));
+            if(length != 0)
+            {
+                // Not sure why these if-statements are needed,
+                // but without them the player slides along the wall
+                // if holding the button towards the wall
+                if(poschange.x != 0)
+                {
+                    playervelx /= length;
+                    playervelx *= playermaxspeed;
+                }
+                if(poschange.y != 0)
+                {
+                    playervely /= length;
+                    playervely *= playermaxspeed;
+                }
+            }
         }
 
         for(int x = 0; x < mapw; x++)
@@ -953,7 +966,7 @@ updateplayermovement()
                     if(willcollidex(playerx, playery, playerw, playerh, playervelx * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
-                        freezex = true;
+                        playervelx = 0;
                         if(playerx > obstaclex)
                             playerx = obstaclex + mapsquaresize/2.0 + playerw/2.0;
                         else
@@ -962,7 +975,7 @@ updateplayermovement()
                     if(willcollidey(playerx, playery, playerw, playerh, playervely * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
-                        freezey = true;
+                        playervely = 0;
                         if(playery > obstacley)
                             playery = obstacley + mapsquaresize/2.0 + playerh/2.0;
                         else
@@ -1003,7 +1016,7 @@ updateplayermovement()
         }
         if(!freezex && !freezey && (playervelx != 0 || playervely != 0))
         {
-            if(abs(playervely) >= abs(playervelx))
+            if(abs(playervely) >= 0.1)
             {
                 if(playervely > 0)
                 {
@@ -1027,46 +1040,14 @@ updateplayermovement()
             }
         }
 
-        // TODO(aidan): clean up this awful mess
-        if(playerdir == dir_down)
+        currentplayeranim = &playeranims[playerdir];
+        for(int i = 0; i < PLAYERANIMATIONCOUNT; i++)
         {
-            currentplayeranim = &playeranims[0];
-            playeranims[1].currentframe = 0;
-            playeranims[1].timetillnext = playeranims[1].timetillnext;
-            playeranims[2].currentframe = 0;
-            playeranims[2].timetillnext = playeranims[2].timetillnext;
-            playeranims[3].currentframe = 0;
-            playeranims[3].timetillnext = playeranims[3].timetillnext;
-        }
-        else if(playerdir == dir_up)
-        {
-            currentplayeranim = &playeranims[1];
-            playeranims[0].currentframe = 0;
-            playeranims[0].timetillnext = playeranims[0].timetillnext;
-            playeranims[2].currentframe = 0;
-            playeranims[2].timetillnext = playeranims[2].timetillnext;
-            playeranims[3].currentframe = 0;
-            playeranims[3].timetillnext = playeranims[3].timetillnext;
-        }
-        else if(playerdir == dir_left)
-        {
-            currentplayeranim = &playeranims[2];
-            playeranims[0].currentframe = 0;
-            playeranims[0].timetillnext = playeranims[0].timetillnext;
-            playeranims[1].currentframe = 0;
-            playeranims[1].timetillnext = playeranims[1].timetillnext;
-            playeranims[3].currentframe = 0;
-            playeranims[3].timetillnext = playeranims[3].timetillnext;
-        }
-        else
-        {
-            currentplayeranim = &playeranims[3];
-            playeranims[0].currentframe = 0;
-            playeranims[0].timetillnext = playeranims[0].timetillnext;
-            playeranims[1].currentframe = 0;
-            playeranims[1].timetillnext = playeranims[1].timetillnext;
-            playeranims[2].currentframe = 0;
-            playeranims[2].timetillnext = playeranims[2].timetillnext;
+            if(i != playerdir)
+            {
+                playeranims[i].currentframe = 0;
+                playeranims[i].timetillnext = playeranims[i].timetillnext;
+            }
         }
 
         if(playervelx != 0 || playervely != 0)
@@ -1075,14 +1056,11 @@ updateplayermovement()
         }
         else
         {
-            playeranims[0].currentframe = 0;
-            playeranims[0].timetillnext = playeranims[0].timetillnext;
-            playeranims[1].currentframe = 0;
-            playeranims[1].timetillnext = playeranims[1].timetillnext;
-            playeranims[2].currentframe = 0;
-            playeranims[2].timetillnext = playeranims[2].timetillnext;
-            playeranims[3].currentframe = 0;
-            playeranims[3].timetillnext = playeranims[3].timetillnext;
+            for(int i = 0; i < PLAYERANIMATIONCOUNT; i++)
+            {
+                playeranims[i].currentframe = 0;
+                playeranims[i].timetillnext = playeranims[i].timetillnext;
+            }
         }
 
         playerx += playervelx * deltatime;
