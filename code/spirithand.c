@@ -848,7 +848,6 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    // TODO(aidan): lock speed (normalize then multiply by max?)
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
@@ -863,7 +862,7 @@ updateplayermovement()
         zoomchange -= camerazoomspeed * deltatime;
     if(keysdown.x)
         zoomchange += camerazoomspeed * deltatime;
-        
+
     if(debug.freecam)
     {
         poschange.x *= cameramovespeed;
@@ -889,6 +888,7 @@ updateplayermovement()
         bool freezey = false;
         playervelx += poschange.x;
         playervely += poschange.y;
+
         if(playervelx > 0)
         {
             playervelx -= playerdrag;
@@ -930,6 +930,18 @@ updateplayermovement()
             playervely = playermaxspeed;
         else if (playervely < -playermaxspeed)
             playervely = -playermaxspeed;
+
+        // Nowmawize vectow >w<
+        double length = sqrt((playervelx*playervelx) + (playervely*playervely));
+        printf("playervel length: %f\n", length);
+        if(length != 0)
+        {
+            playervelx = playervelx / length;
+            playervely = playervely / length;
+            playervelx *= playermaxspeed;
+            playervely *= playermaxspeed;
+        }
+
         for(int x = 0; x < mapw; x++)
         {
             for(int y = 0; y < maph; y++)
