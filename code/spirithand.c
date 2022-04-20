@@ -86,8 +86,6 @@ ParticleSystem {
 } ParticleSystem;
 ParticleSystem mainps;
 
-int addparticle(ParticleSystem *ps, Particle particle);
-
 typedef struct
 Spirit {
     double x; double y;
@@ -127,7 +125,7 @@ global_variable Keysdown keysdown;
 
 global_variable Camera maincam;
 double cameramovespeed = 50;
-double camerazoomspeed = 10;
+double camerazoomspeed = 1;
 
 TTF_Font *debugfont;
 #define FONTASPECTRATIO 0.5
@@ -169,6 +167,19 @@ makeparticle(Animation anim)
     Particle particle = {0};
     particle.anim = anim;
     particle.blendmode = SDL_BLENDMODE_BLEND;
+}
+
+int
+addparticle(ParticleSystem *ps, Particle particle)
+{
+    if(ps->numparticles == MAX_PARTICLES)
+    {
+        printf("ERROR(addparticle): Max number of particles reached!\n");
+        return 1;
+    }
+    ps->particles[ps->numparticles] = particle;
+    ps->numparticles++;
+    return 0;
 }
 
 Spirit*
@@ -276,6 +287,7 @@ updatespirits()
             particle.angvel = randint(-50, 50);
             particle.vely = -10;
             particle.color = spirit->color;
+            particle.drawpriority = 0;
             addparticle(&mainps, particle);
 
             distance = spirit->size / 3;
@@ -288,7 +300,7 @@ updatespirits()
             particle.vely = -10;
             particle.color = color_white;
             particle.drawpriority = 1;
-            particle.blendmode = SDL_BLENDMODE_ADD;
+            //particle.blendmode = SDL_BLENDMODE_ADD;
             //SDL_SetTextureBlendMode(&( particle.anim.frames[particle.anim.currentframe] ),
             //                        SDL_BLENDMODE_ADD);
             addparticle(&mainps, particle);
@@ -329,19 +341,6 @@ updateparticles(ParticleSystem *ps)
     }
 }
 
-int
-addparticle(ParticleSystem *ps, Particle particle)
-{
-    if(ps->numparticles == MAX_PARTICLES)
-    {
-        printf("ERROR(addparticle): Max number of particles reached!\n");
-        return 1;
-    }
-    ps->particles[ps->numparticles] = particle;
-    ps->numparticles++;
-    return 0;
-}
-
 void
 drawparticle(Camera cam, Particle particle)
 {
@@ -362,6 +361,7 @@ drawparticle(Camera cam, Particle particle)
                            particle.color.b);
     SDL_SetTextureAlphaMod(particle.anim.frames[particle.anim.currentframe],
                            particle.alpha);
+
     //SDL_SetTextureBlendMode(particle.anim.frames[particle.anim.currentframe],
     //                        particle.blendmode);
 
@@ -848,6 +848,7 @@ render(Camera cam)
 int
 updateplayermovement()
 {
+    // TODO(aidan): lock speed (normalize then multiply by max?)
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
@@ -1113,7 +1114,7 @@ int main()
     debug.collidercolor.g = color_yellow.g;
     debug.collidercolor.b = color_yellow.b;
     debug.collidercolor.a = color_yellow.a;
-    debug.colliders = true;
+    debug.colliders = false;
     debug.worldgridcolor.r = 0;
     debug.worldgridcolor.g = 0;
     debug.worldgridcolor.b = 0;
