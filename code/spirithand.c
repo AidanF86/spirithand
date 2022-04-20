@@ -24,6 +24,7 @@ Debuginfo {
     bool worldgrid;
     SDL_Color worldgridcolor;
     double worldgridgapsize;
+    bool freecam;
 } Debuginfo;
 
 typedef struct
@@ -96,6 +97,14 @@ Spirit {
     Animation anim;
 } Spirit;
 
+double playerx;
+double playery;
+double playervelx;
+double playervely;
+double playersize = 6;
+enum directions {dir_up, dir_down, dir_left, dir_right};
+enum directions playerdir;
+
 int mousex;
 int mousey;
 bool mouseleftdown;
@@ -111,7 +120,7 @@ TTF_Font *debugfont;
 #define FONTASPECTRATIO 0.5
 bool debugMenuEnabled;
 
-#define MAXSPIRITS 50 // idk 54 kinda sounds and feels right
+#define MAXSPIRITS 50
 global_variable int spiritcount;
 global_variable Spirit spirits[MAXSPIRITS];
 global_variable SDL_Texture *spirittextures[2];
@@ -120,6 +129,8 @@ bool **mainmap;
 int mapw;
 int maph;
 double mapsquaresize;
+
+#include "resourceloading.c"
 
 void advanceanimation(Animation *anim, double time)
 {
@@ -137,21 +148,6 @@ void advanceanimation(Animation *anim, double time)
             anim->currentframe = 0;
         }
     }
-}
-
-SDL_Texture *
-texturefromimage(SDL_Renderer *renderer, char *filename)
-{
-    SDL_Surface *surface = IMG_Load(filename);
-    if(surface == NULL)
-    {
-        printf("Cannot find image file %s\n", filename);
-        //SDL_Quit(); // TODO(aidan): should we really quit?
-        return NULL;
-    }
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-    return texture;
 }
 
 Particle
@@ -199,19 +195,6 @@ updatespirits()
     for(int i = 0; i < spiritcount; i++)
     {
         Spirit spirit = spirits[i];
-        // handle collisions
-        /*
-        if(spirit.x + spirit.size / 2 + spirit.velx > maincam.x + maincam.w / 2 ||
-           spirit.x - spirit.size / 2 + spirit.velx < maincam.x - maincam.w / 2)
-        {
-            velchanges[i][0] = -1;
-        }
-        if(spirit.y + spirit.size / 2 + spirit.vely > maincam.y + maincam.h / 2 ||
-           spirit.y - spirit.size / 2 + spirit.vely < maincam.y - maincam.h / 2)
-        {
-            velchanges[i][1] = -1;
-        }
-        */
 
         for(int a = 0; a < spiritcount; a++)
         {
@@ -301,15 +284,6 @@ updatespirits()
 }
 
 void
-loadfonts()
-{
-    TTF_Init();
-    debugfont = TTF_OpenFont("resources/fonts/JetBrainsMono-Medium.ttf", 90);
-    if(debugfont == NULL)
-        printf("Font could not be loaded!\n");
-}
-
-void
 updateparticles(ParticleSystem *ps)
 {
     for(int i = 0; i < ps->numparticles; i++)
@@ -362,7 +336,7 @@ drawparticle(Camera cam, Particle particle)
                                  particle.y - particle.h/2,
                                  particle.w,
                                  particle.h,
-                                 game);
+                                 space_game);
     SDL_Point center;
     center.x = rect.x;
     center.y = rect.y;
@@ -433,7 +407,7 @@ drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, U
     if(ui)
     {
         //printf("drawtext:ui (%d, %d, %d)", x, y, h);
-        SDL_Rect screenrect = recttoscreen(cam, x, y, 0, h, ui);
+        SDL_Rect screenrect = recttoscreen(cam, x, y, 0, h, space_ui);
         x = screenrect.x;
         y = screenrect.y;
         h = screenrect.h;
@@ -477,7 +451,7 @@ drawbutton(Camera cam, UIDocker *docker, char *text, double h)
             x += docker->totaloffset * docker->offsetscalar;
     }
 
-    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, ui);
+    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, space_ui);
     if(!(mousex < rectscreen.x ||
          mousex > rectscreen.x + rectscreen.w ||
          mousey < rectscreen.y ||
@@ -539,7 +513,7 @@ drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool chec
         x += docker->totaloffset * docker->offsetscalar;
 
 
-    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, ui);
+    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, space_ui);
     if(! (mousex < rectscreen.x ||
           mousex > rectscreen.x + rectscreen.w ||
           mousey < rectscreen.y ||
@@ -597,7 +571,7 @@ drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool chec
 int
 drawrect(Camera cam, double x, double y, double w, double h)
 {
-    SDL_Rect rect = recttoscreen(cam, x, y, w, h, game);
+    SDL_Rect rect = recttoscreen(cam, x, y, w, h, space_game);
     SDL_RenderDrawRect(cam.renderer, &rect);
 }
 
@@ -632,7 +606,7 @@ drawmap(Camera cam, bool** map, int w, int h)
                                              y*mapsquaresize - mapsquaresize/2.0,
                                              mapsquaresize,
                                              mapsquaresize,
-                                             game);
+                                             space_game);
 
                 SDL_RenderFillRect(cam.renderer,
                                    &rect);
@@ -748,7 +722,7 @@ render(Camera cam)
                                           spirit->y - spirit->size / 2,
                                           spirit->size,
                                           spirit->size,
-                                          game);
+                                          space_game);
 
         advanceanimation(&(spirit->anim), deltatime);
         SDL_RenderCopy(cam.renderer,
@@ -771,6 +745,16 @@ render(Camera cam)
                     spirit->size);
         }
     }
+
+    // render player
+    SDL_Rect playerrect = recttoscreen(cam,
+                                       playerx - playersize/2.0,
+                                       playery - playersize/2.0,
+                                       playersize,
+                                       playersize,
+                                       space_game);
+    SDL_SetRenderDrawColor(cam.renderer, 255, 0, 255, 255);
+    SDL_RenderFillRect(cam.renderer, &playerrect);
     
     // render ui
     if(debugMenuEnabled)
@@ -788,6 +772,10 @@ render(Camera cam)
         if(drawbuttoncheckbox(cam, &debugdocker, "colliders", 5, debug.colliders))
         {
             debug.colliders = !debug.colliders;
+        }
+        if(drawbuttoncheckbox(cam, &debugdocker, "freecam", 5, debug.freecam))
+        {
+            debug.freecam = !debug.freecam;
         }
 
 
@@ -816,58 +804,80 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 0.5;
+    double movespeed = 5000;
     double zoomspeed = 0.5;
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
-    {
         poschange.y -= movespeed * deltatime;
-    }
     if(keysdown.down)
-    {
         poschange.y += movespeed * deltatime;
-    }
     if(keysdown.left)
-    {
         poschange.x -= movespeed * deltatime;
-    }
     if(keysdown.right)
-    {
         poschange.x += movespeed * deltatime;
-    }
     if(keysdown.z)
-    {
         zoomchange -= zoomspeed * deltatime;
-    }
     if(keysdown.x)
-    {
         zoomchange += zoomspeed * deltatime;
-    }
         
-    maincam.w += zoomchange * maincam.w;
-    maincam.h += zoomchange * maincam.h;
-    if(maincam.w < maincam.minw)
+    if(debug.freecam)
     {
-        maincam.w = maincam.minw;
+        poschange.x /= 60;
+        poschange.y /= 60;
+        maincam.w += zoomchange * maincam.w;
+        maincam.h += zoomchange * maincam.h;
+        maincam.x += poschange.x * maincam.w * deltatime;
+        maincam.y += poschange.y * maincam.h * deltatime;
+        if(maincam.w < maincam.minw)
+            maincam.w = maincam.minw;
+        else if(maincam.w > maincam.maxw)
+            maincam.w = maincam.maxw;
+        if(maincam.h < maincam.minh)
+            maincam.h = maincam.minh;
+        else if(maincam.h > maincam.maxh)
+            maincam.h = maincam.maxh;
     }
-    else if(maincam.w > maincam.maxw)
+    else
     {
-        maincam.w = maincam.maxw;
+        bool freezex = false;
+        bool freezey = false;
+        playervelx = poschange.x;
+        playervely = poschange.y;
+        for(int x = 0; x < mapw; x++)
+        {
+            for(int y = 0; y < maph; y++)
+            {
+                double obstaclex = x*mapsquaresize;
+                double obstacley = y*mapsquaresize;
+                if(mainmap[x][y])
+                {
+                    if(willcollidex(playerx, playery, playersize, playersize, playervelx * deltatime,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                    {
+                        freezex = true;
+                        if(playerx > obstaclex)
+                            playerx = obstaclex + mapsquaresize/2.0 + playersize/2.0;
+                        else
+                            playerx = obstaclex - mapsquaresize/2.0 - playersize/2.0;
+                    }
+                    if(willcollidey(playerx, playery, playersize, playersize, playervely * deltatime,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                    {
+                        freezey = true;
+                        if(playery > obstacley)
+                            playery = obstacley + mapsquaresize/2.0 + playersize/2.0;
+                        else
+                            playery = obstacley - mapsquaresize/2.0 - playersize/2.0;
+                    }
+                }
+            }
+        }
+        if(!freezex)
+            playerx += playervelx * deltatime;
+        if(!freezey)
+            playery += playervely * deltatime;
     }
-    if(maincam.h < maincam.minh)
-    {
-        maincam.h = maincam.minh;
-    }
-    else if(maincam.h > maincam.maxh)
-    {
-        maincam.h = maincam.maxh;
-    }
-    //printf("maincam.w=%f\n", maincam.w);
-    //printf("maincam.h=%f\n", maincam.h);
-
-    maincam.x += poschange.x * maincam.w;
-    maincam.y += poschange.y * maincam.h;
 }
 
 int
@@ -908,11 +918,12 @@ int main()
     debug.worldgridcolor.a = 255;
     debug.worldgridgapsize = 20;
     debug.worldgrid = false;
+    debug.freecam = false;
     debugMenuEnabled = true;
 
     mapw = 10;
     maph = 10;
-    mapsquaresize = 13;
+    mapsquaresize = 17;
     mainmap = (bool**)malloc(mapw*sizeof(bool*));
     for(int i = 0; i < mapw; i++)
     {
@@ -944,6 +955,10 @@ int main()
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
 
+    Vectori playerinitpos = getemptymapspace(mainmap);
+    playerx = playerinitpos.x;
+    playery = playerinitpos.y;
+
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
                                           SDL_WINDOWPOS_UNDEFINED,
@@ -962,10 +977,7 @@ int main()
         {
             maincam.renderer = renderer;
 
-            // load textures
-            spirittextures[0] = texturefromimage(renderer, "resources/graphics/spirit0.png");
-            spirittextures[1] = texturefromimage(renderer, "resources/graphics/spirit1.png");
-            particle1textures[0] = texturefromimage(renderer, "resources/graphics/particle1.png");
+            loadtextures(renderer);
 
             particle1anim.frames[0] = particle1textures[0];
             particle1anim.numframes = 1;

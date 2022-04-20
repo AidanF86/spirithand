@@ -22,7 +22,7 @@ Camera {
     SDL_Renderer *renderer;
 } Camera;
 
-enum spaces {game, ui};
+enum spaces {space_game, space_ui};
 
 int randint(int min, int max)
 {
@@ -100,13 +100,18 @@ vectorfgametoscreen(Camera cam, double x, double y)
     return posincam;
 }
 
-Vectorf
-vectorfscreentogame(Camera cam, double x, double y)
+
+int
+roundtoint(double x)
 {
-    // TODO(aidan)
-    Vectorf posincam;
-    return posincam;
+    double bruh;
+    if( modf(x, &bruh) >= 0.5 )
+    {
+        return (int)x + 1;
+    }
+    return (int)x;
 }
+
 
 SDL_Rect
 recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces space)
@@ -115,14 +120,14 @@ recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces spa
     double spacey;
     double spacew;
     double spaceh;
-    if(space == game)
+    if(space == space_game)
     {
         spacex = cam.x;
         spacey = cam.y;
         spacew = cam.w;
         spaceh = cam.h;
     }
-    else if(space == ui)
+    else if(space == space_ui)
     {
         spacex = 0;
         spacey = 0;
@@ -135,22 +140,20 @@ recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces spa
         // is taller
         double screentocamratio = (double)cam.wres / (double)spacew;
         double yoffset = (cam.hres - (screentocamratio * spaceh)) / 2;
-        rectincam.y = (y - spacey + spaceh / 2.0) * screentocamratio;
-        rectincam.y += yoffset;
-        rectincam.x = (x - spacex + spacew / 2.0) / spacew * cam.wres;
-        rectincam.h = h * screentocamratio;
-        rectincam.w = w / spacew * cam.wres;
+        rectincam.y = roundtoint((y - spacey + spaceh / 2.0) * screentocamratio + yoffset);
+        rectincam.x = roundtoint((x - spacex + spacew / 2.0) / spacew * cam.wres);
+        rectincam.h = roundtoint(h * screentocamratio);
+        rectincam.w = roundtoint(w / spacew * cam.wres);
     }
     else if((double)(cam.w) / (double)(cam.h) < (double)(cam.wres) / (double)(cam.hres))
     {
         // is longer
         double screentocamratio = (double)cam.hres / (double)spaceh;
         double xoffset = (cam.wres - (screentocamratio * spacew)) / 2;
-        rectincam.x = (x - spacex + spacew / 2.0) * screentocamratio;
-        rectincam.x += xoffset;
-        rectincam.y = (y - spacey + spaceh / 2.0) / spaceh * cam.hres;
-        rectincam.w = w * screentocamratio;
-        rectincam.h = h / spaceh * cam.hres;
+        rectincam.x = roundtoint((x - spacex + spacew / 2.0) * screentocamratio + xoffset);
+        rectincam.y = roundtoint((y - spacey + spaceh / 2.0) / spaceh * cam.hres);
+        rectincam.w = roundtoint(w * screentocamratio);
+        rectincam.h = roundtoint(h / spaceh * cam.hres);
     }
     else
     {
