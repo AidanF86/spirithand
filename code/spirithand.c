@@ -86,6 +86,8 @@ ParticleSystem {
 } ParticleSystem;
 ParticleSystem mainps;
 
+int addparticle(ParticleSystem *ps, Particle particle);
+
 typedef struct
 Spirit {
     double x; double y;
@@ -101,10 +103,16 @@ double playerx;
 double playery;
 double playervelx;
 double playervely;
-double playermaxspeed = 50;
+double playermaxspeed = 60;
+double playeracceleration = 2000;
 double playerdrag = 3;
-double playersize = 6;
-enum directions {dir_up, dir_down, dir_left, dir_right};
+double playerw = 18 / 1.4;
+double playerh = 25 / 1.4;
+#define PLAYERANIMATIONCOUNT 4
+Animation playeranims[PLAYERANIMATIONCOUNT];
+// anim order: down, up, left, right
+Animation *currentplayeranim;
+enum directions {dir_down, dir_up, dir_left, dir_right};
 enum directions playerdir;
 
 int mousex;
@@ -116,7 +124,10 @@ int fps;
 
 global_variable Debuginfo debug;
 global_variable Keysdown keysdown;
+
 global_variable Camera maincam;
+double cameramovespeed = 50;
+double camerazoomspeed = 10;
 
 TTF_Font *debugfont;
 #define FONTASPECTRATIO 0.5
@@ -318,7 +329,8 @@ updateparticles(ParticleSystem *ps)
     }
 }
 
-int addparticle(ParticleSystem *ps, Particle particle)
+int
+addparticle(ParticleSystem *ps, Particle particle)
 {
     if(ps->numparticles == MAX_PARTICLES)
     {
@@ -374,11 +386,19 @@ void
 drawparticles(Camera cam, ParticleSystem *ps)
 {
     for(int i = 0; i < ps->numparticles; i++)
+    {
         if(ps->particles[i].drawpriority == 0)
+        {
             drawparticle(cam, ps->particles[i]);
+        }
+    }
     for(int i = 0; i < ps->numparticles; i++)
+    {
         if(ps->particles[i].drawpriority == 1)
+        {
             drawparticle(cam, ps->particles[i]);
+        }
+    }
 }
 
 int
@@ -736,10 +756,10 @@ render(Camera cam)
         if(debug.colliders)
         {
             SDL_SetRenderDrawColor(cam.renderer,
-                                   color_yellow.r,
-                                   color_yellow.g,
-                                   color_yellow.b,
-                                   color_yellow.a);
+                                   debug.collidercolor.r,
+                                   debug.collidercolor.g,
+                                   debug.collidercolor.b,
+                                   debug.collidercolor.a);
             drawrect(cam,
                     spirit->x - spirit->size / 2,
                     spirit->y - spirit->size / 2,
@@ -750,18 +770,35 @@ render(Camera cam)
 
     // draw player
     SDL_Rect playerrect = recttoscreen(cam,
-                                       playerx - playersize/2.0,
-                                       playery - playersize/2.0,
-                                       playersize,
-                                       playersize,
+                                       playerx - playerw/2.0,
+                                       playery - playerh/2.0,
+                                       playerw,
+                                       playerh,
                                        space_game);
     SDL_SetRenderDrawColor(cam.renderer, 255, 0, 255, 255);
-    SDL_RenderFillRect(cam.renderer, &playerrect);
+    //SDL_RenderFillRect(cam.renderer, &playerrect);
+    SDL_RenderCopy(cam.renderer,
+                   currentplayeranim->frames[currentplayeranim->currentframe],
+                   NULL,
+                   &playerrect);
     SDL_RenderDrawLine(cam.renderer,
                        playerrect.x + playerrect.w / 2,
                        playerrect.y + playerrect.h / 2,
                        playerrect.x + playerrect.w / 2 + playervelx,
                        playerrect.y + playerrect.h / 2 + playervely);
+    if(debug.colliders)
+    {
+        SDL_SetRenderDrawColor(cam.renderer,
+                               debug.collidercolor.r,
+                               debug.collidercolor.g,
+                               debug.collidercolor.b,
+                               debug.collidercolor.a);
+        drawrect(cam,
+                 playerx - playerw / 2,
+                 playery - playerh / 2,
+                 playerw,
+                 playerh);
+    }
     
     // draw ui
     if(debugMenuEnabled)
@@ -811,27 +848,25 @@ render(Camera cam)
 int
 updateplayermovement()
 {
-    double movespeed = 2000;
-    double zoomspeed = 0.5;
     Vectorf poschange = {0};
     double zoomchange = 0;
     if(keysdown.up)
-        poschange.y -= movespeed * deltatime;
+        poschange.y -= deltatime;
     if(keysdown.down)
-        poschange.y += movespeed * deltatime;
+        poschange.y += deltatime;
     if(keysdown.left)
-        poschange.x -= movespeed * deltatime;
+        poschange.x -= deltatime;
     if(keysdown.right)
-        poschange.x += movespeed * deltatime;
+        poschange.x += deltatime;
     if(keysdown.z)
-        zoomchange -= zoomspeed * deltatime;
+        zoomchange -= camerazoomspeed * deltatime;
     if(keysdown.x)
-        zoomchange += zoomspeed * deltatime;
+        zoomchange += camerazoomspeed * deltatime;
         
     if(debug.freecam)
     {
-        poschange.x /= 20;
-        poschange.y /= 20;
+        poschange.x *= cameramovespeed;
+        poschange.y *= cameramovespeed;
         maincam.w += zoomchange * maincam.w;
         maincam.h += zoomchange * maincam.h;
         maincam.x += poschange.x * maincam.w * deltatime;
@@ -847,6 +882,8 @@ updateplayermovement()
     }
     else
     {
+        poschange.x *= playeracceleration;
+        poschange.y *= playeracceleration;
         bool freezex = false;
         bool freezey = false;
         playervelx += poschange.x;
@@ -885,21 +922,13 @@ updateplayermovement()
         }
 
         if(playervelx > playermaxspeed)
-        {
             playervelx = playermaxspeed;
-        }
         else if (playervelx < -playermaxspeed)
-        {
             playervelx = -playermaxspeed;
-        }
         if(playervely > playermaxspeed)
-        {
             playervely = playermaxspeed;
-        }
         else if (playervely < -playermaxspeed)
-        {
             playervely = -playermaxspeed;
-        }
         for(int x = 0; x < mapw; x++)
         {
             for(int y = 0; y < maph; y++)
@@ -908,23 +937,23 @@ updateplayermovement()
                 double obstacley = y*mapsquaresize;
                 if(mainmap[x][y])
                 {
-                    if(willcollidex(playerx, playery, playersize, playersize, playervelx * deltatime,
+                    if(willcollidex(playerx, playery, playerw, playerh, playervelx * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         freezex = true;
                         if(playerx > obstaclex)
-                            playerx = obstaclex + mapsquaresize/2.0 + playersize/2.0;
+                            playerx = obstaclex + mapsquaresize/2.0 + playerw/2.0;
                         else
-                            playerx = obstaclex - mapsquaresize/2.0 - playersize/2.0;
+                            playerx = obstaclex - mapsquaresize/2.0 - playerw/2.0;
                     }
-                    if(willcollidey(playerx, playery, playersize, playersize, playervely * deltatime,
+                    if(willcollidey(playerx, playery, playerw, playerh, playervely * deltatime,
                                     obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
                         freezey = true;
                         if(playery > obstacley)
-                            playery = obstacley + mapsquaresize/2.0 + playersize/2.0;
+                            playery = obstacley + mapsquaresize/2.0 + playerh/2.0;
                         else
-                            playery = obstacley - mapsquaresize/2.0 - playersize/2.0;
+                            playery = obstacley - mapsquaresize/2.0 - playerh/2.0;
                     }
                 }
             }
@@ -932,11 +961,117 @@ updateplayermovement()
         if(freezex)
         {
             playervelx = 0;
+            if(!freezey)
+            {
+                if(playervely > 0)
+                {
+                    playerdir = dir_down;
+                }
+                else if(playervely < 0)
+                {
+                    playerdir = dir_up;
+                }
+            }
         }
         if(freezey)
         {
             playervely = 0;
+            if(!freezex)
+            {
+                if(playervelx > 0)
+                {
+                    playerdir = dir_right;
+                }
+                else if(playervelx < 0)
+                {
+                    playerdir = dir_left;
+                }
+            }
         }
+        if(!freezex && !freezey && (playervelx != 0 || playervely != 0))
+        {
+            if(abs(playervely) >= abs(playervelx))
+            {
+                if(playervely > 0)
+                {
+                    playerdir = dir_down;
+                }
+                else
+                {
+                    playerdir = dir_up;
+                }
+            }
+            else
+            {
+                if(playervelx > 0)
+                {
+                    playerdir = dir_right;
+                }
+                else
+                {
+                    playerdir = dir_left;
+                }
+            }
+        }
+
+        // TODO(aidan): clean up this awful mess
+        if(playerdir == dir_down)
+        {
+            currentplayeranim = &playeranims[0];
+            playeranims[1].currentframe = 0;
+            playeranims[1].timetillnext = playeranims[1].timetillnext;
+            playeranims[2].currentframe = 0;
+            playeranims[2].timetillnext = playeranims[2].timetillnext;
+            playeranims[3].currentframe = 0;
+            playeranims[3].timetillnext = playeranims[3].timetillnext;
+        }
+        else if(playerdir == dir_up)
+        {
+            currentplayeranim = &playeranims[1];
+            playeranims[0].currentframe = 0;
+            playeranims[0].timetillnext = playeranims[0].timetillnext;
+            playeranims[2].currentframe = 0;
+            playeranims[2].timetillnext = playeranims[2].timetillnext;
+            playeranims[3].currentframe = 0;
+            playeranims[3].timetillnext = playeranims[3].timetillnext;
+        }
+        else if(playerdir == dir_left)
+        {
+            currentplayeranim = &playeranims[2];
+            playeranims[0].currentframe = 0;
+            playeranims[0].timetillnext = playeranims[0].timetillnext;
+            playeranims[1].currentframe = 0;
+            playeranims[1].timetillnext = playeranims[1].timetillnext;
+            playeranims[3].currentframe = 0;
+            playeranims[3].timetillnext = playeranims[3].timetillnext;
+        }
+        else
+        {
+            currentplayeranim = &playeranims[3];
+            playeranims[0].currentframe = 0;
+            playeranims[0].timetillnext = playeranims[0].timetillnext;
+            playeranims[1].currentframe = 0;
+            playeranims[1].timetillnext = playeranims[1].timetillnext;
+            playeranims[2].currentframe = 0;
+            playeranims[2].timetillnext = playeranims[2].timetillnext;
+        }
+
+        if(playervelx != 0 || playervely != 0)
+        {
+            advanceanimation(currentplayeranim, deltatime);
+        }
+        else
+        {
+            playeranims[0].currentframe = 0;
+            playeranims[0].timetillnext = playeranims[0].timetillnext;
+            playeranims[1].currentframe = 0;
+            playeranims[1].timetillnext = playeranims[1].timetillnext;
+            playeranims[2].currentframe = 0;
+            playeranims[2].timetillnext = playeranims[2].timetillnext;
+            playeranims[3].currentframe = 0;
+            playeranims[3].timetillnext = playeranims[3].timetillnext;
+        }
+
         playerx += playervelx * deltatime;
         playery += playervely * deltatime;
 
@@ -974,11 +1109,11 @@ int main()
     initcolors();
     loadfonts();
 
-    debug.collidercolor.r = 255;
-    debug.collidercolor.g = 255;
-    debug.collidercolor.b = 255;
-    debug.collidercolor.a = 255;
-    debug.colliders = false;
+    debug.collidercolor.r = color_yellow.r;
+    debug.collidercolor.g = color_yellow.g;
+    debug.collidercolor.b = color_yellow.b;
+    debug.collidercolor.a = color_yellow.a;
+    debug.colliders = true;
     debug.worldgridcolor.r = 0;
     debug.worldgridcolor.g = 0;
     debug.worldgridcolor.b = 0;
@@ -1016,8 +1151,8 @@ int main()
                        // cause world grid rendering bugs
     maincam.maxw = maincam.w * 50.0;
     maincam.maxh = maincam.h * 50.0;
-    maincam.wres = 640;
-    maincam.hres = 480;
+    maincam.wres = 1280;
+    maincam.hres = 720;
 
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
@@ -1025,6 +1160,9 @@ int main()
     Vectori playerinitpos = getemptymapspace(mainmap);
     playerx = playerinitpos.x;
     playery = playerinitpos.y;
+
+    maincam.x = playerx;
+    maincam.y = playery;
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *window = SDL_CreateWindow("Game Window",
@@ -1045,6 +1183,13 @@ int main()
             maincam.renderer = renderer;
 
             loadtextures(renderer);
+            for(int i = 0; i < PLAYERANIMATIONCOUNT; i++)
+            {
+                playeranims[i].numframes = 4;
+                playeranims[i].currentframe = 0;
+                playeranims[i].frametime = 0.1;
+                playeranims[i].timetillnext = playeranims[i].frametime;
+            }
 
             particle1anim.frames[0] = particle1textures[0];
             particle1anim.numframes = 1;
