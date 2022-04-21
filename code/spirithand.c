@@ -18,24 +18,29 @@ bool handleevent(SDL_Event *event);
 double deltatime;
 
 typedef struct
-Debuginfo {
+DebugInfo {
     bool colliders;
     SDL_Color collidercolor;
     bool worldgrid;
     SDL_Color worldgridcolor;
     double worldgridgapsize;
     bool freecam;
-} Debuginfo;
+} DebugInfo;
 
 typedef struct
-Keysdown {
+KeysDown {
     bool up;
     bool down;
     bool left;
     bool right;
     bool z;
     bool x;
-} Keysdown;
+} KeysDown;
+
+typedef struct
+KeysUp {
+    bool z;
+} KeysUp;
 
 typedef struct
 UIDocker {
@@ -93,6 +98,8 @@ Spirit {
     double size;
     double timebetweenparticles;
     double timetonextparticle;
+    bool beingheld;
+    bool beingthrown;
     SDL_Color color;
     Animation anim;
 } Spirit;
@@ -106,6 +113,8 @@ double playeracceleration = 2000;
 double playerdrag = 7;
 double playerw = 18 / 1.4;
 double playerh = 25 / 1.4;
+double spiritselectradius = 20;
+Spirit *selectedspirit;
 #define PLAYERANIMATIONCOUNT 4
 Animation playeranims[PLAYERANIMATIONCOUNT];
 // anim order: down, up, left, right
@@ -118,10 +127,12 @@ int mousey;
 bool mouseleftdown;
 bool mouseleftup;
 
+
 int fps;
 
-global_variable Debuginfo debug;
-global_variable Keysdown keysdown;
+global_variable DebugInfo debug;
+global_variable KeysDown keysdown;
+global_variable KeysUp   keysup;
 
 global_variable Camera maincam;
 double cameramovespeed = 50;
@@ -194,6 +205,8 @@ makespirit(double x, double y, double size, SDL_Color color)
     newspirit.x = x;
     newspirit.y = y;
     newspirit.size = size;
+    newspirit.beingheld = false;
+    newspirit.beingthrown = false;
     newspirit.color = color;
     newspirit.anim.frames[0] = spirittextures[0];
     //newspirit.anim.frames[1] = spirittextures[1];
@@ -216,54 +229,79 @@ updatespirits()
         velchanges[i][1] = 1;
     }
 
+    bool aspiritselected = false;
     for(int i = 0; i < spiritcount; i++)
     {
         Spirit spirit = spirits[i];
 
-        for(int a = 0; a < spiritcount; a++)
+        if(!spirit.beingheld && !spirit.beingthrown)
         {
-            Spirit spirit2 = spirits[a];
-            if(i == a)
+            for(int a = 0; a < spiritcount; a++)
             {
-                continue;
-            }
-
-            if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx * deltatime))
-            {
-                velchanges[i][0] = -1;
-            }
-
-            if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
-                            spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely * deltatime))
-            {
-                velchanges[i][1] = -1;
-            }
-        }
-
-        for(int x = 0; x < mapw; x++)
-        {
-            for(int y = 0; y < maph; y++)
-            {
-                double obstaclex = x*mapsquaresize;
-                double obstacley = y*mapsquaresize;
-                if(mainmap[x][y])
+                Spirit spirit2 = spirits[a];
+                if(i == a)
                 {
-                    if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
-                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
-                    {
-                        velchanges[i][0] = -1;
+                    continue;
+                }
 
-                    }
-                    if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
-                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
+                                spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx * deltatime))
+                {
+                    velchanges[i][0] = -1;
+                }
+
+                if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
+                                spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely * deltatime))
+                {
+                    velchanges[i][1] = -1;
+                }
+            }
+
+            for(int x = 0; x < mapw; x++)
+            {
+                for(int y = 0; y < maph; y++)
+                {
+                    double obstaclex = x*mapsquaresize;
+                    double obstacley = y*mapsquaresize;
+                    if(mainmap[x][y])
                     {
-                        velchanges[i][1] = -1;
+                        if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
+                                        obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                        {
+                            velchanges[i][0] = -1;
+
+                        }
+                        if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
+                                        obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                        {
+                            velchanges[i][1] = -1;
+                        }
                     }
                 }
             }
-        }
 
+            if(sqrt((spirit.x-playerx)*(spirit.x-playerx) + 
+                    (spirit.y-playery)*(spirit.y-playery)) <=
+                    spiritselectradius)
+            {
+                if(selectedspirit == NULL || 
+                   (selectedspirit != NULL && !selectedspirit->beingheld))
+                {
+                    selectedspirit = &(spirits[i]);
+                    aspiritselected = true;
+                }
+            }
+        }
+        else if(spirit.beingheld)
+        {
+            spirits[i].x = playerx;
+            spirits[i].y = playery - 12;
+        }
+    }
+
+    if(!aspiritselected && selectedspirit != NULL && !selectedspirit->beingheld)
+    {
+        selectedspirit = NULL;
     }
 
     for(int i = 0; i < spiritcount; i++)
@@ -616,7 +654,11 @@ getemptymapspace(bool** map)
 int
 drawmap(Camera cam, bool** map, int w, int h)
 {
-    SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 155);
+    SDL_SetRenderDrawColor(cam.renderer,
+                           155,
+                           155,
+                           155,
+                           255);
     for(int x = 0; x < w; x++)
     {
         for(int y = 0; y < h; y++)
@@ -715,7 +757,11 @@ drawworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
 int
 render(Camera cam)
 {
-    SDL_SetRenderDrawColor(cam.renderer, 155, 155, 155, 255);
+    SDL_SetRenderDrawColor(cam.renderer,
+                           color_grass_green.r,
+                           color_grass_green.g,
+                           color_grass_green.b,
+                           color_grass_green.a);
     SDL_RenderClear(cam.renderer);
         // draw background canvas (to make sure of the size)
     //SDL_Rect canvasrect = rectgametoscreen(cam,
@@ -735,6 +781,33 @@ render(Camera cam)
 
     drawparticles(cam, &mainps);
 
+    // draw player
+    SDL_Rect playerrect = recttoscreen(cam,
+                                       playerx - playerw/2.0,
+                                       playery - playerh/2.0,
+                                       playerw,
+                                       playerh,
+                                       space_game);
+    SDL_SetRenderDrawColor(cam.renderer, 255, 0, 255, 255);
+    //SDL_RenderFillRect(cam.renderer, &playerrect);
+    SDL_RenderCopy(cam.renderer,
+                   currentplayeranim->frames[currentplayeranim->currentframe],
+                   NULL,
+                   &playerrect);
+    if(debug.colliders)
+    {
+        SDL_SetRenderDrawColor(cam.renderer,
+                               debug.collidercolor.r,
+                               debug.collidercolor.g,
+                               debug.collidercolor.b,
+                               debug.collidercolor.a);
+        drawrect(cam,
+                 playerx - playerw / 2,
+                 playery - playerh / 2,
+                 playerw,
+                 playerh);
+    }
+    
     Spirit *spirit;
     for(int i = 0; i < spiritcount; i++)
     {
@@ -766,40 +839,23 @@ render(Camera cam)
                     spirit->size,
                     spirit->size);
         }
+
+        // highlight selected spirit
+        if(spirit == selectedspirit)
+        {
+            SDL_SetRenderDrawColor(cam.renderer,
+                                   color_blue.r,
+                                   color_blue.g,
+                                   color_blue.b,
+                                   color_blue.a);
+            drawrect(cam,
+                    spirit->x - spirit->size / 2,
+                    spirit->y - spirit->size / 2,
+                    spirit->size,
+                    spirit->size);
+        }
     }
 
-    // draw player
-    SDL_Rect playerrect = recttoscreen(cam,
-                                       playerx - playerw/2.0,
-                                       playery - playerh/2.0,
-                                       playerw,
-                                       playerh,
-                                       space_game);
-    SDL_SetRenderDrawColor(cam.renderer, 255, 0, 255, 255);
-    //SDL_RenderFillRect(cam.renderer, &playerrect);
-    SDL_RenderCopy(cam.renderer,
-                   currentplayeranim->frames[currentplayeranim->currentframe],
-                   NULL,
-                   &playerrect);
-    SDL_RenderDrawLine(cam.renderer,
-                       playerrect.x + playerrect.w / 2,
-                       playerrect.y + playerrect.h / 2,
-                       playerrect.x + playerrect.w / 2 + playervelx,
-                       playerrect.y + playerrect.h / 2 + playervely);
-    if(debug.colliders)
-    {
-        SDL_SetRenderDrawColor(cam.renderer,
-                               debug.collidercolor.r,
-                               debug.collidercolor.g,
-                               debug.collidercolor.b,
-                               debug.collidercolor.a);
-        drawrect(cam,
-                 playerx - playerw / 2,
-                 playery - playerh / 2,
-                 playerw,
-                 playerh);
-    }
-    
     // draw ui
     if(debugMenuEnabled)
     {
@@ -841,8 +897,39 @@ render(Camera cam)
     }
 
 
-    drawsidebars(cam);
+    if(cam.wres != cam.hres)
+    {
+        drawsidebars(cam);
+    }
     SDL_RenderPresent(cam.renderer);
+}
+
+int
+updatespiritgrabbing()
+{
+    if(selectedspirit != NULL)
+    {
+        if(selectedspirit->beingheld)
+        {
+            if(keysup.z)
+            {
+                printf("throwing spirit!\n");
+                // throw spirit
+                selectedspirit->beingheld = false;
+                selectedspirit->beingthrown = false;
+                selectedspirit->velx = playervelx*2;
+                selectedspirit->vely = playervely*2;
+                selectedspirit = NULL;
+            }
+        }
+        else
+        {
+            if(keysup.z)
+            {
+                selectedspirit->beingheld = true;
+            }
+        }
+    }
 }
 
 int
@@ -1014,6 +1101,25 @@ updateplayermovement()
                 }
             }
         }
+        if(playervelx == 0 && playervely == 0)
+        {
+            if(poschange.y > 0)
+            {
+                playerdir = dir_down;
+            }
+            else if(poschange.y < 0)
+            {
+                playerdir = dir_up;
+            }
+            else if(poschange.x > 0)
+            {
+                playerdir = dir_right;
+            }
+            else if(poschange.x < 0)
+            {
+                playerdir = dir_left;
+            }
+        }
         if(!freezex && !freezey && (playervelx != 0 || playervely != 0))
         {
             if(abs(playervely) >= 0.1)
@@ -1133,17 +1239,16 @@ int main()
 
     maincam.x = (mapw-1)*mapsquaresize/2;
     maincam.y = (maph-1)*mapsquaresize/2;
-    maincam.w = mapw*mapsquaresize;
-    maincam.h = maph*mapsquaresize;
-    maincam.wui = 100;
-    maincam.hui = 100;
-    maincam.minw = 40;
-    maincam.minh = 40; // TODO(aidan): find out why values below 40
-                       // cause world grid rendering bugs
+    //maincam.w = mapw*mapsquaresize / 1.5;
+    //maincam.h = maph*mapsquaresize / 1.5;
+    maincam.w = maincam.h = 235;
+    maincam.wui = maincam.hui = 100;
+    maincam.minw = maincam.minh = 40; // TODO(aidan): find out why values below 40
+                                      // cause world grid rendering bugs
     maincam.maxw = maincam.w * 50.0;
     maincam.maxh = maincam.h * 50.0;
-    maincam.wres = 1280;
-    maincam.hres = 720;
+    maincam.wres = 500;
+    maincam.hres = 500;
 
     mousex = maincam.x + maincam.w / 2;
     mousey = maincam.y + maincam.h / 2;
@@ -1235,6 +1340,7 @@ int main()
             {
                 SDL_Event event;
                 mouseleftup = false;
+                keysup.z = false;
                 while(SDL_PollEvent(&event))
                 {
                     if(handleevent(&event))
@@ -1244,6 +1350,7 @@ int main()
                 }
 
                 updateplayermovement();
+                updatespiritgrabbing();
                 updatespirits();
                 updateparticles(&mainps);
                 render(maincam);
@@ -1395,6 +1502,7 @@ bool handleevent(SDL_Event *event)
             else if(keycode == SDLK_z)
             {
                 keysdown.z = false;
+                keysup.z = true;
             }
             else if(keycode == SDLK_x)
             {

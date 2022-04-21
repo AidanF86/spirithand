@@ -8,6 +8,7 @@ global_variable SDL_Color color_blue;
 global_variable SDL_Color color_purple;
 global_variable SDL_Color color_black;
 global_variable SDL_Color color_white;
+global_variable SDL_Color color_grass_green;
 
 void initcolors()
 {
@@ -39,5 +40,10 @@ void initcolors()
     color_white.g = 255;
     color_white.b = 255;
     color_white.a = 255;
+
+    color_grass_green.r = 72;
+    color_grass_green.g = 199;
+    color_grass_green.b = 24;
+    color_grass_green.a = 255;
 }
 
