@@ -83,7 +83,7 @@ Particle spirittrailparticle;
 SDL_Texture *particle1textures[1];
 Animation particle1anim;
 
-#define MAX_PARTICLES 1000
+#define MAX_PARTICLES 10000
 typedef struct
 ParticleSystem {
     Particle particles[MAX_PARTICLES];
@@ -91,15 +91,18 @@ ParticleSystem {
 } ParticleSystem;
 ParticleSystem mainps;
 
+enum spiritstates {state_beingheld, state_thrown, state_seekinggrid, state_free};
+
 typedef struct
 Spirit {
     double x; double y;
     double velx; double vely;
     double size;
+    double mapx; double mapy;
+    double mapdestx; double mapdesty;
     double timebetweenparticles;
     double timetonextparticle;
-    bool beingheld;
-    bool beingthrown;
+    enum spiritstates state;
     SDL_Color color;
     Animation anim;
 } Spirit;
@@ -205,8 +208,7 @@ makespirit(double x, double y, double size, SDL_Color color)
     newspirit.x = x;
     newspirit.y = y;
     newspirit.size = size;
-    newspirit.beingheld = false;
-    newspirit.beingthrown = false;
+    newspirit.state = state_free;
     newspirit.color = color;
     newspirit.anim.frames[0] = spirittextures[0];
     //newspirit.anim.frames[1] = spirittextures[1];
@@ -234,7 +236,7 @@ updatespirits()
     {
         Spirit spirit = spirits[i];
 
-        if(!spirit.beingheld && !spirit.beingthrown)
+        if(spirit.state == state_free)
         {
             for(int a = 0; a < spiritcount; a++)
             {
@@ -285,21 +287,23 @@ updatespirits()
                     spiritselectradius)
             {
                 if(selectedspirit == NULL || 
-                   (selectedspirit != NULL && !selectedspirit->beingheld))
+                   (selectedspirit != NULL &&
+                    selectedspirit->state == state_free ||
+                    selectedspirit->state == state_seekinggrid))
                 {
                     selectedspirit = &(spirits[i]);
                     aspiritselected = true;
                 }
             }
         }
-        else if(spirit.beingheld)
+        else if(spirit.state == state_beingheld)
         {
             spirits[i].x = playerx;
             spirits[i].y = playery - 12;
         }
     }
 
-    if(!aspiritselected && selectedspirit != NULL && !selectedspirit->beingheld)
+    if(!aspiritselected && selectedspirit != NULL && !selectedspirit->state == state_beingheld)
     {
         selectedspirit = NULL;
     }
@@ -915,8 +919,7 @@ updatespiritgrabbing()
             {
                 printf("throwing spirit!\n");
                 // throw spirit
-                selectedspirit->beingheld = false;
-                selectedspirit->beingthrown = false;
+                selectedspirit->state = state_thrown;
                 selectedspirit->velx = playervelx*2;
                 selectedspirit->vely = playervely*2;
                 selectedspirit = NULL;
@@ -926,7 +929,7 @@ updatespiritgrabbing()
         {
             if(keysup.z)
             {
-                selectedspirit->beingheld = true;
+                selectedspirit->state = state_beingheld;
             }
         }
     }
@@ -1308,14 +1311,13 @@ int main()
             spirittrailparticle.color = color_white;
             spirittrailparticle.anim = particle1anim;
 
-            for(int i = 0; i < 4; i++)
+            for(int i = 0; i < 1; i++)
             {
                 Vectori pos = getemptymapspace(mainmap);
                 Spirit *newspirit;
-                if(i < 2)
-                    newspirit = makespirit(pos.x, pos.y, 8, color_orange);
-                else
-                    newspirit = makespirit(pos.x, pos.y, 8, color_blue);
+
+                newspirit = makespirit(pos.x, pos.y, 8, color_orange);
+
                 newspirit->timebetweenparticles = 0.1;
                 newspirit->timetonextparticle = 0;
                 int left = randint(0, 2);
