@@ -1,5 +1,7 @@
 #include <stdbool.h>
 
+enum directions {dir_down, dir_up, dir_left, dir_right};
+
 typedef struct
 Vectorf {
     double x; double y;
@@ -9,6 +11,47 @@ typedef struct
 Vectori {
     int x; int y;
 } Vectori;
+
+Vectori
+newvectori(int x, int y)
+{
+    Vectori vector;
+    vector.x = x;
+    vector.y = y;
+    return vector;
+}
+
+Vectori
+addvectori(Vectori a, Vectori b)
+{
+    return newvectori(a.x + b.x, a.y + b.y);
+}
+
+Vectori
+vectorofdir(enum directions dir)
+{
+    switch(dir)
+    {
+        case dir_up:
+        {
+            return newvectori(0, -1);
+        } break;
+        case dir_down:
+        {
+            return newvectori(0, 1);
+        } break;
+        case dir_left:
+        {
+            return newvectori(-1, 0);
+        } break;
+        case dir_right:
+        {
+            return newvectori(1, 0);
+        } break;
+    }
+    printf("wtf?? no dir it seems\n");
+    return newvectori(0, 0);
+}
 
 typedef struct
 Camera {
@@ -106,7 +149,6 @@ roundtoint(double x)
     return (int)x;
 }
 
-
 SDL_Rect
 recttoscreen(Camera cam, double x, double y, double w, double h, enum spaces space)
 {
@@ -173,7 +215,8 @@ camtorect(Camera cam)
     return rect;
 }
 
-int drawsidebars(Camera cam)
+void
+drawsidebars(Camera cam)
 {
     SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 255);
     SDL_Rect bars[2];
@@ -212,3 +255,24 @@ int drawsidebars(Camera cam)
     SDL_RenderFillRects(cam.renderer, bars, 2);
 }
 
+double
+applydrag(double x, double drag)
+{
+    if(x < 0)
+    {
+        x += drag;
+        if(x > 0)
+        {
+            x = 0;
+        }
+    }
+    else if(x > 0)
+    {
+        x -= drag;
+        if(x < 0)
+        {
+            x = 0;
+        }
+    }
+    return x;
+}

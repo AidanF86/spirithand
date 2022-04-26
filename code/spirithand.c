@@ -50,6 +50,7 @@ UIDocker {
     bool vertical;
     int offsetscalar;
 } UIDocker;
+enum spiritstates {state_beingheld, state_thrown, state_seekinggrid, state_free};
 
 #define MAX_ANIM_FRAMES 10
 typedef struct
@@ -74,10 +75,10 @@ Particle {
     double timeleft;
     bool diewhensmall;
     char drawpriority;
-    SDL_BlendMode blendmode;
     SDL_Color color;
     Animation anim;
 } Particle;
+
 Particle spirittrailparticle;
 
 SDL_Texture *particle1textures[1];
@@ -89,9 +90,8 @@ ParticleSystem {
     Particle particles[MAX_PARTICLES];
     int numparticles;
 } ParticleSystem;
-ParticleSystem mainps;
 
-enum spiritstates {state_beingheld, state_thrown, state_seekinggrid, state_free};
+ParticleSystem mainps;
 
 typedef struct
 Spirit {
@@ -99,7 +99,8 @@ Spirit {
     double velx; double vely;
     double size;
     double mapx; double mapy;
-    double mapdestx; double mapdesty;
+    double movespeed;
+    enum directions dir;
     double timebetweenparticles;
     double timetonextparticle;
     enum spiritstates state;
@@ -107,10 +108,13 @@ Spirit {
     Animation anim;
 } Spirit;
 
+double spiritdrag = 0.5;
+
 double playerx;
 double playery;
 double playervelx;
 double playervely;
+enum directions playerdir;
 double playermaxspeed = 90;
 double playeracceleration = 2000;
 double playerdrag = 7;
@@ -122,8 +126,6 @@ Spirit *selectedspirit;
 Animation playeranims[PLAYERANIMATIONCOUNT];
 // anim order: down, up, left, right
 Animation *currentplayeranim;
-enum directions {dir_down, dir_up, dir_left, dir_right};
-enum directions playerdir;
 
 int mousex;
 int mousey;
@@ -156,6 +158,9 @@ int maph;
 double mapsquaresize;
 
 #include "resourceloading.c"
+#include "drawing.c"
+
+
 
 void advanceanimation(Animation *anim, double time)
 {
@@ -180,7 +185,6 @@ makeparticle(Animation anim)
 {
     Particle particle = {0};
     particle.anim = anim;
-    particle.blendmode = SDL_BLENDMODE_BLEND;
 }
 
 int
@@ -197,7 +201,7 @@ addparticle(ParticleSystem *ps, Particle particle)
 }
 
 Spirit*
-makespirit(double x, double y, double size, SDL_Color color)
+makespirit(double mapx, double mapy, double size, SDL_Color color)
 {
     if(spiritcount == MAXSPIRITS)
     {
@@ -205,8 +209,12 @@ makespirit(double x, double y, double size, SDL_Color color)
         return NULL;
     }
     Spirit newspirit;
-    newspirit.x = x;
-    newspirit.y = y;
+    newspirit.mapx = mapx;
+    newspirit.mapy = mapy;
+    newspirit.x = mapx * mapsquaresize;
+    newspirit.y = mapy * mapsquaresize;
+    newspirit.movespeed = 0.01;
+    printf("makespirit: newspirit.x: %d, newspirit.y: %d\n", (int)newspirit.x, (int)newspirit.y);
     newspirit.size = size;
     newspirit.state = state_free;
     newspirit.color = color;
@@ -221,69 +229,136 @@ makespirit(double x, double y, double size, SDL_Color color)
     return &(spirits[spiritcount++]);
 }
 
-int
-updatespirits()
+enum directions
+getnewdir(bool **map, double x, double y, enum directions currentdir)
 {
-    int velchanges [spiritcount][2];
-    for(int i = 0; i < spiritcount; i++)
+    int xi = roundtoint(x);
+    int yi = roundtoint(y);
+    enum directions possibledirs[4];
+    int possibledirscount = 0;
+    if(currentdir != dir_down)
     {
-        velchanges[i][0] = 1;
-        velchanges[i][1] = 1;
-    }
-
-    bool aspiritselected = false;
-    for(int i = 0; i < spiritcount; i++)
-    {
-        Spirit spirit = spirits[i];
-
-        if(spirit.state == state_free)
+        if(!map[xi][yi+1])
         {
-            for(int a = 0; a < spiritcount; a++)
+            possibledirs[possibledirscount++] = dir_down;
+        }
+    }
+    if(currentdir != dir_up)
+    {
+        if(!map[xi][yi-1])
+        {
+            possibledirs[possibledirscount++] = dir_up;
+        }
+    }
+    if(currentdir != dir_left)
+    {
+        if(!map[xi-1][yi])
+        {
+            possibledirs[possibledirscount++] = dir_left;
+        }
+    }
+    if(currentdir != dir_right)
+    {
+        if(!map[xi+1][yi])
+        {
+            possibledirs[possibledirscount++] = dir_right;
+        }
+    }
+    return possibledirs[randint(0, possibledirscount)];
+}
+
+Vectori
+getnextpos(double x, double y, enum directions dir)
+{
+    int xi = roundtoint(x);
+    int yi = roundtoint(y);
+    return addvectori(newvectori(x, y), vectorofdir(dir));
+}
+
+Spirit
+updatespiritposition(Spirit spirit, bool **map)
+{
+    if(spirit.state == state_free)
+    {
+        // spirits should have a chance of turning at intersections
+        Vectori nextpos = getnextpos(spirit.mapx, spirit.mapy, spirit.dir);
+        if(map[nextpos.x][nextpos.y])
+        {
+            spirit.dir = getnewdir(map, spirit.mapx, spirit.mapy, spirit.dir);
+        }
+        spirit.mapx += vectorofdir(spirit.dir).x * spirit.movespeed;
+        spirit.mapy += vectorofdir(spirit.dir).y * spirit.movespeed;
+        spirit.x = spirit.mapx * mapsquaresize;
+        spirit.y = spirit.mapy * mapsquaresize;
+    }
+    else if(spirit.state == state_thrown)
+    {
+        int velchangex = 1;
+        int velchangey = 1;
+        for(int x = 0; x < mapw; x++)
+        {
+            for(int y = 0; y < maph; y++)
             {
-                Spirit spirit2 = spirits[a];
-                if(i == a)
+                double obstaclex = x*mapsquaresize;
+                double obstacley = y*mapsquaresize;
+                if(mainmap[x][y])
                 {
-                    continue;
-                }
-
-                if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
-                                spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.velx * deltatime))
-                {
-                    velchanges[i][0] = -1;
-                }
-
-                if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
-                                spirit2.x, spirit2.y, spirit2.size, spirit2.size, spirit2.vely * deltatime))
-                {
-                    velchanges[i][1] = -1;
-                }
-            }
-
-            for(int x = 0; x < mapw; x++)
-            {
-                for(int y = 0; y < maph; y++)
-                {
-                    double obstaclex = x*mapsquaresize;
-                    double obstacley = y*mapsquaresize;
-                    if(mainmap[x][y])
+                    if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
                     {
-                        if(willcollidex(spirit.x, spirit.y, spirit.size, spirit.size, spirit.velx * deltatime,
-                                        obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
-                        {
-                            velchanges[i][0] = -1;
+                        velchangex = -1;
 
-                        }
-                        if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
-                                        obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
-                        {
-                            velchanges[i][1] = -1;
-                        }
+                    }
+                    if(willcollidey(spirit.x, spirit.y, spirit.size, spirit.size, spirit.vely * deltatime,
+                                    obstaclex, obstacley, mapsquaresize, mapsquaresize, 0))
+                    {
+                        velchangey = -1;
                     }
                 }
             }
+        }
+        spirit.velx *= velchangex;
+        spirit.vely *= velchangey;
 
-            if(sqrt((spirit.x-playerx)*(spirit.x-playerx) + 
-                    (spirit.y-playery)*(spirit.y-playery)) <=
+        spirit.velx = applydrag(spirit.velx, spiritdrag);
+        spirit.vely = applydrag(spirit.vely, spiritdrag);
+
+        if(spirit.velx == 0 && spirit.vely == 0)
+        {
+            spirit.state = state_free;
+            spirit.mapx = spirit.x / mapsquaresize;
+            spirit.mapy = spirit.y / mapsquaresize;
+        }
+
+        spirit.x += spirit.velx * deltatime;
+        spirit.y += spirit.vely * deltatime;
+    }
+    else if(spirit.state == state_beingheld)
+    {
+        spirit.x = playerx;
+        spirit.y = playery - 12;
+    }
+
+    return spirit;
+}
+
+int
+updatespirits()
+{
+    // update spirit positions
+    for(int i = 0; i < spiritcount; i++)
+    {
+        spirits[i] = updatespiritposition(spirits[i], mainmap);
+    }
+
+    // update spirit selection
+    bool aspiritselected = false;
+    for(int i = 0; i < spiritcount; i++)
+    {
+        if(spirits[i].state == state_free)
+        {
+            if(sqrt((spirits[i].x-playerx)*(spirits[i].x-playerx) + 
+                    (spirits[i].y-playery)*(spirits[i].y-playery)) <=
                     spiritselectradius)
             {
                 if(selectedspirit == NULL || 
@@ -296,25 +371,16 @@ updatespirits()
                 }
             }
         }
-        else if(spirit.state == state_beingheld)
-        {
-            spirits[i].x = playerx;
-            spirits[i].y = playery - 12;
-        }
     }
-
     if(!aspiritselected && selectedspirit != NULL && !selectedspirit->state == state_beingheld)
     {
         selectedspirit = NULL;
     }
 
+    // update spirit particle emission
     for(int i = 0; i < spiritcount; i++)
     {
         Spirit *spirit = &(spirits[i]);
-        spirit->velx *= velchanges[i][0];
-        spirit->vely *= velchanges[i][1];
-        spirit->x += spirit->velx * deltatime;
-        spirit->y += spirit->vely * deltatime;
         spirit->timetonextparticle -= deltatime;
         if(spirit->timetonextparticle <= 0)
         {
@@ -342,9 +408,6 @@ updatespirits()
             particle.vely = -10;
             particle.color = color_white;
             particle.drawpriority = 1;
-            //particle.blendmode = SDL_BLENDMODE_ADD;
-            //SDL_SetTextureBlendMode(&( particle.anim.frames[particle.anim.currentframe] ),
-            //                        SDL_BLENDMODE_ADD);
             addparticle(&mainps, particle);
         }
     }
@@ -383,261 +446,7 @@ updateparticles(ParticleSystem *ps)
     }
 }
 
-void
-drawparticle(Camera cam, Particle particle)
-{
-    SDL_Rect rect = recttoscreen(cam,
-                                 particle.x - particle.w/2,
-                                 particle.y - particle.h/2,
-                                 particle.w,
-                                 particle.h,
-                                 space_game);
-    SDL_Point center;
-    center.x = rect.x;
-    center.y = rect.y;
-    //SDL_SetTextureBlendMode(particle.anim.frames[particle.anim.currentframe],
-    //                        SDL_BLENDMODE_ADD);
-    SDL_SetTextureColorMod(particle.anim.frames[particle.anim.currentframe],
-                           particle.color.r,
-                           particle.color.g,
-                           particle.color.b);
-    SDL_SetTextureAlphaMod(particle.anim.frames[particle.anim.currentframe],
-                           particle.alpha);
 
-    //SDL_SetTextureBlendMode(particle.anim.frames[particle.anim.currentframe],
-    //                        particle.blendmode);
-
-    SDL_RenderCopyEx(cam.renderer,
-                     particle.anim.frames[particle.anim.currentframe],
-                     NULL,
-                     &rect,
-                     particle.angle,
-                     NULL,
-                     //&center,
-                     SDL_FLIP_NONE);
-
-    SDL_SetTextureBlendMode(particle.anim.frames[particle.anim.currentframe],
-                            SDL_BLENDMODE_BLEND);
-    SDL_SetTextureColorMod(particle.anim.frames[particle.anim.currentframe],
-                           255,
-                           255,
-                           255);
-}
-
-void
-drawparticles(Camera cam, ParticleSystem *ps)
-{
-    for(int i = 0; i < ps->numparticles; i++)
-    {
-        if(ps->particles[i].drawpriority == 0)
-        {
-            drawparticle(cam, ps->particles[i]);
-        }
-    }
-    for(int i = 0; i < ps->numparticles; i++)
-    {
-        if(ps->particles[i].drawpriority == 1)
-        {
-            drawparticle(cam, ps->particles[i]);
-        }
-    }
-}
-
-int
-drawtext(Camera cam, char *text, int x, int y, int h, TTF_Font *font, bool ui, UIDocker *docker)
-{
-    if(docker != NULL)
-    {
-        x = docker->x;
-        y = docker->y;
-        if(docker->vertical)
-            y += docker->totaloffset * docker->offsetscalar;
-        else
-            x += docker->totaloffset * docker->offsetscalar;
-    }
-
-    if(docker != NULL)
-    {
-        if(docker->vertical)
-            docker->totaloffset += h;
-        else
-            docker->totaloffset += strlen(text) * h * FONTASPECTRATIO;
-    }
-
-    int textlength = strlen(text);
-    SDL_Color color;
-    SDL_GetRenderDrawColor(cam.renderer, &(color.r), &(color.g), &(color.b), &(color.a));
-
-    if(ui)
-    {
-        //printf("drawtext:ui (%d, %d, %d)", x, y, h);
-        SDL_Rect screenrect = recttoscreen(cam, x, y, 0, h, space_ui);
-        x = screenrect.x;
-        y = screenrect.y;
-        h = screenrect.h;
-        //printf(" -> (%d, %d, %d)\n", x, y, h);
-    }
-
-    for(int i = 0; i < textlength; i++) {
-        SDL_Rect rect;
-        rect.x = x + (i * (h * FONTASPECTRATIO) ); // TODO(aidan): add spacing
-        rect.y = y;
-        rect.w = (h * FONTASPECTRATIO);
-        rect.h = h;
-        //if(ui)
-        //    rect = rectuitoscreen(cam, rect.x, rect.y, rect.w, rect.h);
-        //else
-        //    rect = rectgametoscreen(cam, rect.x, rect.y, rect.w, rect.h);
-
-        // TODO(aidan): definitely inefficient, should use glyph caching
-        SDL_Surface *glyphcache = TTF_RenderGlyph_Solid(font, text[i], color);
-        SDL_Texture *glyph = SDL_CreateTextureFromSurface(cam.renderer, glyphcache);
-        SDL_RenderCopy(cam.renderer, glyph, NULL, &rect);
-        SDL_FreeSurface(glyphcache);
-        SDL_DestroyTexture(glyph);
-    }
-}
-
-bool
-drawbutton(Camera cam, UIDocker *docker, char *text, double h)
-{
-    bool beinghovered = false;
-    bool beingheld = false;
-    bool beingreleased = false;
-    double x = docker->x;
-    double y = docker->y;
-    double w = strlen(text) * h * FONTASPECTRATIO;
-    if(docker != NULL)
-    {
-        if(docker->vertical)
-            y += docker->totaloffset * docker->offsetscalar;
-        else
-            x += docker->totaloffset * docker->offsetscalar;
-    }
-
-    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, space_ui);
-    if(!(mousex < rectscreen.x ||
-         mousex > rectscreen.x + rectscreen.w ||
-         mousey < rectscreen.y ||
-         mousey > rectscreen.y + rectscreen.h))
-    {
-        beinghovered = true;
-        if(mouseleftdown)
-        {
-            beingheld = true;
-        }
-        // TODO(aidan): else if?
-        if(mouseleftup)
-        {
-            beingreleased = true;
-        }
-    }
-
-    // render background rect
-    if(beingheld)
-        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    else if(beinghovered)
-        SDL_SetRenderDrawColor(cam.renderer, 100, 100, 100, 150);
-    else
-        SDL_SetRenderDrawColor(cam.renderer, 55, 55, 55, 150);
-    SDL_RenderFillRect(cam.renderer, &rectscreen);
-    // render text
-    if(beingheld)
-        SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
-    else
-        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    drawtext(cam, text, rectscreen.x, rectscreen.y, rectscreen.h, debugfont, false, NULL);
-    // render border rect
-    SDL_RenderDrawRect(cam.renderer, &rectscreen);
-
-    if(docker != NULL)
-    {
-        if(docker->vertical)
-            docker->totaloffset += h;
-        else
-            docker->totaloffset += w;
-    }
-
-    return beingreleased;
-}
-
-bool
-drawbuttoncheckbox(Camera cam, UIDocker *docker, char *text, double h, bool checked)
-{
-    bool beinghovered = false;
-    bool beingheld = false;
-    bool beingreleased = false;
-    double x = docker->x;
-    double y = docker->y;
-    double w = strlen(text) * h * FONTASPECTRATIO + h;
-
-    if(docker->vertical)
-        y += docker->totaloffset * docker->offsetscalar;
-    else
-        x += docker->totaloffset * docker->offsetscalar;
-
-
-    SDL_Rect rectscreen = recttoscreen(cam, x, y, w, h, space_ui);
-    if(! (mousex < rectscreen.x ||
-          mousex > rectscreen.x + rectscreen.w ||
-          mousey < rectscreen.y ||
-          mousey > rectscreen.y + rectscreen.h))
-    {
-        beinghovered = true;
-        if(mouseleftdown)
-        {
-            beingheld = true;
-        }
-        // TODO(aidan): else if?
-        if(mouseleftup)
-        {
-            beingreleased = true;
-        }
-    }
-
-    // render background rect
-    if(beingheld)
-        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    else if(beinghovered)
-        SDL_SetRenderDrawColor(cam.renderer, 100, 100, 100, 150);
-    else
-        SDL_SetRenderDrawColor(cam.renderer, 55, 55, 55, 150);
-    SDL_RenderFillRect(cam.renderer, &rectscreen);
-    // render text
-    if(beingheld)
-        SDL_SetRenderDrawColor(cam.renderer, 0, 0, 0, 150);
-    else
-        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-    //render check rect
-    if(checked)
-    {
-        SDL_SetRenderDrawColor(cam.renderer, 255, 255, 255, 150);
-        SDL_Rect checkboxrect = rectscreen;
-        checkboxrect.w = rectscreen.h;
-        checkboxrect.x += rectscreen.h / 4;
-        checkboxrect.y += rectscreen.h / 4;
-        checkboxrect.w -= rectscreen.h / 4 * 2;
-        checkboxrect.h -= rectscreen.h / 4 * 2;
-        SDL_RenderFillRect(cam.renderer, &checkboxrect);
-    }
-    drawtext(cam, text, rectscreen.x + rectscreen.h, rectscreen.y, rectscreen.h, debugfont, false, NULL);
-    // render border rect
-    SDL_RenderDrawRect(cam.renderer, &rectscreen);
-
-    if(docker->vertical)
-        docker->totaloffset += h;
-    else
-        docker->totaloffset += w;
-
-    return beingreleased;
-}
-
-int
-drawrect(Camera cam, double x, double y, double w, double h)
-{
-    SDL_Rect rect = recttoscreen(cam, x, y, w, h, space_game);
-    SDL_RenderDrawRect(cam.renderer, &rect);
-}
 
 Vectori
 getemptymapspace(bool** map)
@@ -650,112 +459,7 @@ getemptymapspace(bool** map)
         vector.y = randint(1, maph-1);
     } while(map[vector.x][vector.y] && count < 10);
     // TODO(aidan): implement a more reliable method
-    vector.x *= mapsquaresize;
-    vector.y *= mapsquaresize;
     return vector;
-}
-
-int
-drawmap(Camera cam, bool** map, int w, int h)
-{
-    SDL_SetRenderDrawColor(cam.renderer,
-                           155,
-                           155,
-                           155,
-                           255);
-    for(int x = 0; x < w; x++)
-    {
-        for(int y = 0; y < h; y++)
-        {
-            if(map[x][y])
-            {
-                SDL_Rect rect = recttoscreen(cam,
-                                             x*mapsquaresize - mapsquaresize/2.0,
-                                             y*mapsquaresize - mapsquaresize/2.0,
-                                             mapsquaresize,
-                                             mapsquaresize,
-                                             space_game);
-
-                SDL_RenderFillRect(cam.renderer,
-                                   &rect);
-            }
-        }
-    }
-}
-
-int
-drawworldgridaux(Camera cam, double gapsize, SDL_Color color)
-{
-    color.a = color.a / 4;
-
-    double minx = cam.x - cam.w / 2.0 - fmod(cam.x - cam.w / 2.0, gapsize);
-    double miny = cam.y - cam.h / 2.0 - fmod(cam.y - cam.h / 2.0, gapsize);
-    double maxx = cam.x + cam.w / 2.0 + fmod(cam.x + cam.w / 2.0, gapsize);
-    double maxy = cam.y + cam.h / 2.0 + fmod(cam.y + cam.h / 2.0, gapsize);
-    minx -= gapsize;
-    miny -= gapsize;
-    maxx += gapsize;
-    maxy += gapsize;
-
-    SDL_SetRenderDrawColor(cam.renderer,
-                           color.r,
-                           color.g,
-                           color.b,
-                           color.a);
-    for(int x = minx; x <= maxx; x+= gapsize)
-    {
-        Vectori minscreenpos = vectorfgametoscreen(cam, x, miny);
-        Vectori maxscreenpos = vectorfgametoscreen(cam, x, maxy);
-        SDL_RenderDrawLine(cam.renderer,
-                           minscreenpos.x,
-                           minscreenpos.y,
-                           maxscreenpos.x,
-                           maxscreenpos.y);
-    }
-    for(int y = miny; y <= maxy; y+= gapsize)
-    {
-        Vectori minscreenpos = vectorfgametoscreen(cam, minx, y);
-        Vectori maxscreenpos = vectorfgametoscreen(cam, maxx, y);
-        SDL_RenderDrawLine(cam.renderer,
-                           minscreenpos.x,
-                           minscreenpos.y,
-                           maxscreenpos.x,
-                           maxscreenpos.y);
-    }
-}
-
-int
-drawworldgrid(Camera cam, double gapsize, SDL_Color color, int reccount)
-{
-    if(reccount >= 7)
-    {
-        printf("drawworldgrid: WTF\n");
-        return 1;
-    }
-
-    // find appropriate gap size
-    if(cam.w / gapsize > 8.0 || cam.h / gapsize > 8.0) 
-    {
-        //printf("Nested drawgrid: size=%f\n", gapsize);
-        drawworldgrid(cam, gapsize * 2.0, color, reccount + 1);
-        return 0;
-    }
-    else if (cam.w / gapsize < 4.0 || cam.h / gapsize < 4.0) 
-    {
-        //printf("Nested drawgrid: size=%f\n", gapsize);
-        drawworldgrid(cam, gapsize / 2.0, color, reccount + 1);
-        return 0;
-    }
-
-    double subalpha = ((cam.w / gapsize) - 4.0) / 4.0;
-    subalpha = (1.0 - subalpha) * 255;
-
-    // render sub-grid
-    SDL_Color subcolor = color;
-    subcolor.a = subalpha;
-    drawworldgridaux(cam, gapsize / 2.0, subcolor);
-
-    drawworldgridaux(cam, gapsize, color);
 }
 
 int
@@ -913,7 +617,7 @@ updatespiritgrabbing()
 {
     if(selectedspirit != NULL)
     {
-        if(selectedspirit->beingheld)
+        if(selectedspirit->state == state_beingheld)
         {
             if(keysup.z)
             {
@@ -1257,8 +961,8 @@ int main()
     mousey = maincam.y + maincam.h / 2;
 
     Vectori playerinitpos = getemptymapspace(mainmap);
-    playerx = playerinitpos.x;
-    playery = playerinitpos.y;
+    playerx = playerinitpos.x * mapsquaresize;
+    playery = playerinitpos.y * mapsquaresize;
 
     maincam.x = playerx;
     maincam.y = playery;
@@ -1282,6 +986,7 @@ int main()
             maincam.renderer = renderer;
 
             loadtextures(renderer);
+
             for(int i = 0; i < PLAYERANIMATIONCOUNT; i++)
             {
                 playeranims[i].numframes = 4;
