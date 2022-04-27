@@ -214,6 +214,8 @@ makespirit(double mapx, double mapy, double size, SDL_Color color)
     Spirit newspirit;
     newspirit.mapx = mapx;
     newspirit.mapy = mapy;
+    newspirit.mapdestx = mapx;
+    newspirit.mapdesty = mapy;
     newspirit.x = mapx * mapsquaresize;
     newspirit.y = mapy * mapsquaresize;
     newspirit.movespeed = 1.5;
@@ -257,44 +259,6 @@ makespiritpair(double mapx1, double mapy1, double mapx2, double mapy2, double si
     spirit2->pair = spirit1;
 }
 
-enum directions
-getnewdir(bool **map, double x, double y, enum directions currentdir)
-{
-    int xi = roundtoint(x);
-    int yi = roundtoint(y);
-    enum directions possibledirs[4];
-    int possibledirscount = 0;
-    if(currentdir != dir_down)
-    {
-        if(!map[xi][yi+1])
-        {
-            possibledirs[possibledirscount++] = dir_down;
-        }
-    }
-    if(currentdir != dir_up)
-    {
-        if(!map[xi][yi-1])
-        {
-            possibledirs[possibledirscount++] = dir_up;
-        }
-    }
-    if(currentdir != dir_left)
-    {
-        if(!map[xi-1][yi])
-        {
-            possibledirs[possibledirscount++] = dir_left;
-        }
-    }
-    if(currentdir != dir_right)
-    {
-        if(!map[xi+1][yi])
-        {
-            possibledirs[possibledirscount++] = dir_right;
-        }
-    }
-    return possibledirs[randint(0, possibledirscount)];
-}
-
 Vectori
 getnextpos(double x, double y, enum directions dir)
 {
@@ -328,19 +292,58 @@ checknextpos(bool **map, double x, double y, enum directions dir)
     return false;
 }
 
+Vectorf
+getnewdest(bool **map, double x, double y, enum directions currentdir)
+{
+    int xi = roundtoint(x);
+    int yi = roundtoint(y);
+    Vectorf possibledests[4];
+    int possibledestscount = 0;
+    if(!map[xi][yi+1])
+    {
+        possibledests[possibledestscount++] = newvectorf(xi, yi+1);
+    }
+    if(!map[xi][yi-1])
+    {
+        possibledests[possibledestscount++] = newvectorf(xi, yi-1);
+    }
+    if(!map[xi-1][yi])
+    {
+        possibledests[possibledestscount++] = newvectorf(xi-1, yi);
+    }
+    if(!map[xi+1][yi])
+    {
+        possibledests[possibledestscount++] = newvectorf(xi+1, yi);
+    }
+    return possibledests[randint(0, possibledestscount+1)];
+}
+
 Spirit
 updatespiritposition(Spirit spirit, bool **map)
 {
     if(spirit.state == state_free)
     {
         // spirits should have a chance of turning at intersections
+        if(fabs(spirit.mapdestx - spirit.mapx) < 0.1 && 
+           fabs(spirit.mapdesty - spirit.mapy) < 0.1)
+        {
+            Vectorf newdest = getnewdest(map, spirit.mapx, spirit.mapy, spirit.dir);
+            spirit.mapdestx = newdest.x;
+            spirit.mapdestx = newdest.x;
+        }
+
+        /*
         if(checknextpos(map, spirit.mapx, spirit.mapy, spirit.dir))
         {
             Vectori nextpos = getnextpos(spirit.mapx, spirit.mapy, spirit.dir);
             spirit.dir = getnewdir(map, spirit.mapx, spirit.mapy, spirit.dir);
         }
-        spirit.mapx += vectorofdir(spirit.dir).x * spirit.movespeed * deltatime;
-        spirit.mapy += vectorofdir(spirit.dir).y * spirit.movespeed * deltatime;
+        */
+
+        Vectorf direction = normalizevector(spirit.mapdestx - spirit.mapx,
+                                            spirit.mapdesty - spirit.mapy);
+        spirit.mapx += direction.x * spirit.movespeed * deltatime;
+        spirit.mapy += direction.y * spirit.movespeed * deltatime;
         spirit.x = spirit.mapx * mapsquaresize + sin(spirit.mapy) * mapsquaresize/2.3;
         spirit.y = spirit.mapy * mapsquaresize + sin(spirit.mapx) * mapsquaresize/2.3;
     }
