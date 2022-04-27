@@ -1,6 +1,7 @@
 #include <stdbool.h>
 
 enum directions {dir_down, dir_up, dir_left, dir_right};
+char *dirnames[4] = {"down", "up", "left", "right"};
 
 typedef struct
 Vectorf {
@@ -141,12 +142,11 @@ vectorfgametoscreen(Camera cam, double x, double y)
 int
 roundtoint(double x)
 {
-    double bruh;
-    if( modf(x, &bruh) >= 0.5 )
+    if(x < 0)
     {
-        return (int)x + 1;
+        return (int)(x - 0.5);
     }
-    return (int)x;
+    return (int)(x + 0.5);
 }
 
 SDL_Rect

@@ -25,6 +25,7 @@ DebugInfo {
     SDL_Color worldgridcolor;
     double worldgridgapsize;
     bool freecam;
+    bool frozen;
 } DebugInfo;
 
 typedef struct
@@ -213,7 +214,7 @@ makespirit(double mapx, double mapy, double size, SDL_Color color)
     newspirit.mapy = mapy;
     newspirit.x = mapx * mapsquaresize;
     newspirit.y = mapy * mapsquaresize;
-    newspirit.movespeed = 0.01;
+    newspirit.movespeed = 1.5;
     printf("makespirit: newspirit.x: %d, newspirit.y: %d\n", (int)newspirit.x, (int)newspirit.y);
     newspirit.size = size;
     newspirit.state = state_free;
@@ -272,7 +273,32 @@ getnextpos(double x, double y, enum directions dir)
 {
     int xi = roundtoint(x);
     int yi = roundtoint(y);
-    return addvectori(newvectori(x, y), vectorofdir(dir));
+    return addvectori(newvectori(xi, yi), vectorofdir(dir));
+}
+
+bool
+checknextpos(bool **map, double x, double y, enum directions dir)
+{
+    switch(dir)
+    {
+        case dir_up:
+        {
+            return map[roundtoint(x)][roundtoint(y-0.5)];
+        } break;
+        case dir_down:
+        {
+            return map[roundtoint(x)][roundtoint(y+0.5)];
+        } break;
+        case dir_left:
+        {
+            return map[roundtoint(x-0.5)][roundtoint(y)];
+        } break;
+        case dir_right:
+        {
+            return map[roundtoint(x+0.5)][roundtoint(y)];
+        } break;
+    }
+    return false;
 }
 
 Spirit
@@ -281,13 +307,27 @@ updatespiritposition(Spirit spirit, bool **map)
     if(spirit.state == state_free)
     {
         // spirits should have a chance of turning at intersections
-        Vectori nextpos = getnextpos(spirit.mapx, spirit.mapy, spirit.dir);
-        if(map[nextpos.x][nextpos.y])
+        if(checknextpos(map, spirit.mapx, spirit.mapy, spirit.dir))
         {
+            Vectori nextpos = getnextpos(spirit.mapx, spirit.mapy, spirit.dir);
             spirit.dir = getnewdir(map, spirit.mapx, spirit.mapy, spirit.dir);
         }
-        spirit.mapx += vectorofdir(spirit.dir).x * spirit.movespeed;
-        spirit.mapy += vectorofdir(spirit.dir).y * spirit.movespeed;
+        spirit.mapx += vectorofdir(spirit.dir).x * spirit.movespeed * deltatime;
+        spirit.mapy += vectorofdir(spirit.dir).y * spirit.movespeed * deltatime;
+        spirit.x = spirit.mapx * mapsquaresize + sin(spirit.mapy) * mapsquaresize/2.3;
+        spirit.y = spirit.mapy * mapsquaresize + sin(spirit.mapx) * mapsquaresize/2.3;
+    }
+    else if(spirit.state == state_seekinggrid)
+    {
+        spirit.mapx = interpolatelinear(spirit.mapx, roundtoint(spirit.mapx), 3 * deltatime);
+        spirit.mapy = interpolatelinear(spirit.mapy, roundtoint(spirit.mapy), 3 * deltatime);
+        if(fabs(spirit.mapx - roundtoint(spirit.mapx)) < 0.05 &&
+           fabs(spirit.mapy - roundtoint(spirit.mapy)) < 0.05)
+        {
+            spirit.mapx = roundtoint(spirit.mapx);
+            spirit.mapy = roundtoint(spirit.mapy);
+            spirit.state = state_free;
+        }
         spirit.x = spirit.mapx * mapsquaresize;
         spirit.y = spirit.mapy * mapsquaresize;
     }
@@ -323,15 +363,15 @@ updatespiritposition(Spirit spirit, bool **map)
         spirit.velx = applydrag(spirit.velx, spiritdrag);
         spirit.vely = applydrag(spirit.vely, spiritdrag);
 
-        if(spirit.velx == 0 && spirit.vely == 0)
-        {
-            spirit.state = state_free;
-            spirit.mapx = spirit.x / mapsquaresize;
-            spirit.mapy = spirit.y / mapsquaresize;
-        }
-
         spirit.x += spirit.velx * deltatime;
         spirit.y += spirit.vely * deltatime;
+
+        if(spirit.velx == 0 && spirit.vely == 0)
+        {
+            spirit.mapx = spirit.x / (double)mapsquaresize;
+            spirit.mapy = spirit.y / (double)mapsquaresize;
+            spirit.state = state_seekinggrid;
+        }
     }
     else if(spirit.state == state_beingheld)
     {
@@ -571,19 +611,24 @@ render(Camera cam)
         debugdocker.x = cam.wui*-1/2;
         debugdocker.y = cam.hui*-1/2;
         debugdocker.totaloffset = 0;
-        debugdocker.vertical = false;
+        debugdocker.vertical = true;
         debugdocker.offsetscalar = 1.1;
-        if(drawbuttoncheckbox(cam, &debugdocker, "grid", 5, debug.worldgrid))
+        double textsize = 4;
+        if(drawbuttoncheckbox(cam, &debugdocker, "grid", textsize, debug.worldgrid))
         {
             debug.worldgrid = !debug.worldgrid;
         }
-        if(drawbuttoncheckbox(cam, &debugdocker, "colliders", 5, debug.colliders))
+        if(drawbuttoncheckbox(cam, &debugdocker, "colliders", textsize, debug.colliders))
         {
             debug.colliders = !debug.colliders;
         }
-        if(drawbuttoncheckbox(cam, &debugdocker, "freecam", 5, debug.freecam))
+        if(drawbuttoncheckbox(cam, &debugdocker, "freecam", textsize, debug.freecam))
         {
             debug.freecam = !debug.freecam;
+        }
+        if(drawbuttoncheckbox(cam, &debugdocker, "frozen", textsize, debug.frozen))
+        {
+            debug.frozen = !debug.frozen;
         }
 
 
@@ -925,11 +970,12 @@ int main()
     debug.worldgridgapsize = 20;
     debug.worldgrid = false;
     debug.freecam = false;
+    debug.frozen = false;
     debugMenuEnabled = true;
 
     mapw = 10;
     maph = 10;
-    mapsquaresize = 25;
+    mapsquaresize = 20;
     mainmap = (bool**)malloc(mapw*sizeof(bool*));
     for(int i = 0; i < mapw; i++)
     {
@@ -994,6 +1040,7 @@ int main()
                 playeranims[i].frametime = 0.1;
                 playeranims[i].timetillnext = playeranims[i].frametime;
             }
+            currentplayeranim = &playeranims[0];
 
             particle1anim.frames[0] = particle1textures[0];
             particle1anim.numframes = 1;
@@ -1016,12 +1063,17 @@ int main()
             spirittrailparticle.color = color_white;
             spirittrailparticle.anim = particle1anim;
 
-            for(int i = 0; i < 1; i++)
+            for(int i = 0; i < 6; i++)
             {
                 Vectori pos = getemptymapspace(mainmap);
                 Spirit *newspirit;
 
-                newspirit = makespirit(pos.x, pos.y, 8, color_orange);
+                if(i%3 == 0)
+                    newspirit = makespirit(pos.x, pos.y, 8, color_orange);
+                else if(i%3 == 1)
+                    newspirit = makespirit(pos.x, pos.y, 8, color_blue);
+                else if(i%3 == 2)
+                    newspirit = makespirit(pos.x, pos.y, 8, color_yellow);
 
                 newspirit->timebetweenparticles = 0.1;
                 newspirit->timetonextparticle = 0;
@@ -1082,6 +1134,10 @@ int main()
                 int counterelapsed = endcounter - lastcounter;
 
                 deltatime = counterelapsed / 1000000000.0;
+                if(debug.frozen)
+                {
+                    deltatime = 0;
+                }
 
                 double msperframe = ((1000.0f * (double)counterelapsed) / (double)perfcountfrequency);
                 fps = round( (double)perfcountfrequency / (double)counterelapsed );
