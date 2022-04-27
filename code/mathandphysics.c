@@ -54,6 +54,26 @@ vectorofdir(enum directions dir)
     return newvectori(0, 0);
 }
 
+Vectorf
+newvectorf(double x, double y)
+{
+    Vectorf vector;
+    vector.x = x;
+    vector.y = y;
+    return vector;
+}
+
+Vectorf
+normalizevector(double x, double y)
+{
+    double length = sqrt( (x*x) + (y*y) );
+    if(length != 0)
+    {
+        return newvectorf(x/length, y/length);
+    }
+    return newvectorf(0, 0);
+}
+
 typedef struct
 Camera {
     double x; double y;

@@ -100,6 +100,7 @@ Spirit {
     double velx; double vely;
     double size;
     double mapx; double mapy;
+    double mapdestx; double mapdesty;
     double movespeed;
     enum directions dir;
     double timebetweenparticles;
@@ -812,22 +813,19 @@ updateplayermovement()
         // Nowmawize vectow  > w <
         if(poschange.x != 0 || poschange.y != 0)
         {
-            double length = sqrt((playervelx*playervelx) + (playervely*playervely));
-            if(length != 0)
+            // Not sure why these if-statements are needed,
+            // but without them the player slides along the wall
+            // if holding the button towards the wall
+            Vectorf normplayervel = normalizevector(playervelx, playervely);
+            if(poschange.x != 0)
             {
-                // Not sure why these if-statements are needed,
-                // but without them the player slides along the wall
-                // if holding the button towards the wall
-                if(poschange.x != 0)
-                {
-                    playervelx /= length;
-                    playervelx *= playermaxspeed;
-                }
-                if(poschange.y != 0)
-                {
-                    playervely /= length;
-                    playervely *= playermaxspeed;
-                }
+                playervelx = normplayervel.x;
+                playervelx *= playermaxspeed;
+            }
+            if(poschange.y != 0)
+            {
+                playervely = normplayervel.y;
+                playervely *= playermaxspeed;
             }
         }
 
