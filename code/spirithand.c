@@ -107,6 +107,7 @@ Spirit {
     enum spiritstates state;
     SDL_Color color;
     Animation anim;
+    struct Spirit *pair;
 } Spirit;
 
 double spiritdrag = 0.5;
@@ -226,8 +227,33 @@ makespirit(double mapx, double mapy, double size, SDL_Color color)
     newspirit.anim.frametime = 0.5;
     newspirit.anim.timetillnext = randdouble(0, newspirit.anim.frametime);
 
+    newspirit.timebetweenparticles = 0.1;
+    newspirit.timetonextparticle = 0;
+
+    int left = randint(0, 2);
+    int up = randint(0, 2);
+    double speed = 15;
+    if(left == 0)
+        newspirit.velx = -speed;
+    else
+        newspirit.velx = speed;
+    if(up == 0)
+        newspirit.vely = -speed;
+    else
+        newspirit.vely = speed;
+
+
     spirits[spiritcount] = newspirit;
     return &(spirits[spiritcount++]);
+}
+
+void
+makespiritpair(double mapx1, double mapy1, double mapx2, double mapy2, double size, SDL_Color color)
+{
+    Spirit *spirit1 = makespirit(mapx1, mapy1, size, color);
+    Spirit *spirit2 = makespirit(mapx2, mapy2, size, color);
+    spirit1->pair = spirit2;
+    spirit2->pair = spirit1;
 }
 
 enum directions
@@ -587,6 +613,17 @@ render(Camera cam)
                     spirit->size,
                     spirit->size);
         }
+
+        // temp
+        SDL_SetRenderDrawColor(cam.renderer,
+                               spirit->color.r,
+                               spirit->color.g,
+                               spirit->color.b,
+                               spirit->color.a);
+        Vectori pos1 = vectorfgametoscreen(cam, spirit->x, spirit->y);
+        Vectori pos2 = vectorfgametoscreen(cam, spirit->pair->x, spirit->pair->y);
+        SDL_RenderDrawLine(cam.renderer,
+                           pos1.x, pos1.y, pos2.x, pos2.y);
 
         // highlight selected spirit
         if(spirit == selectedspirit)
@@ -1063,31 +1100,18 @@ int main()
             spirittrailparticle.color = color_white;
             spirittrailparticle.anim = particle1anim;
 
-            for(int i = 0; i < 6; i++)
+            for(int i = 0; i < 3; i++)
             {
-                Vectori pos = getemptymapspace(mainmap);
-                Spirit *newspirit;
+                Vectori pos1= getemptymapspace(mainmap);
+                Vectori pos2= getemptymapspace(mainmap);
 
                 if(i%3 == 0)
-                    newspirit = makespirit(pos.x, pos.y, 8, color_orange);
+                    makespiritpair(pos1.x, pos1.y, pos2.x, pos2.y, 8, color_orange);
                 else if(i%3 == 1)
-                    newspirit = makespirit(pos.x, pos.y, 8, color_blue);
+                    makespiritpair(pos1.x, pos1.y, pos2.x, pos2.y, 8, color_blue);
                 else if(i%3 == 2)
-                    newspirit = makespirit(pos.x, pos.y, 8, color_yellow);
+                    makespiritpair(pos1.x, pos1.y, pos2.x, pos2.y, 8, color_yellow);
 
-                newspirit->timebetweenparticles = 0.1;
-                newspirit->timetonextparticle = 0;
-                int left = randint(0, 2);
-                int up = randint(0, 2);
-                double speed = 15;
-                if(left == 0)
-                    newspirit->velx = -speed;
-                else
-                    newspirit->velx = speed;
-                if(up == 0)
-                    newspirit->vely = -speed;
-                else
-                    newspirit->vely = speed;
             }
 
             int gameupdatehz = 144;
