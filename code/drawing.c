@@ -268,15 +268,58 @@ drawmap(Camera cam, bool** map, int w, int h)
         {
             if(map[x][y])
             {
-                SDL_Rect rect = recttoscreen(cam,
-                                             x*mapsquaresize - mapsquaresize/2.0,
-                                             y*mapsquaresize - mapsquaresize/2.0,
-                                             mapsquaresize,
-                                             mapsquaresize,
-                                             space_game);
+                SDL_SetRenderDrawColor(cam.renderer,
+                                       100,
+                                       100,
+                                       100,
+                                       255);
+                if(x == 0 || y == 0 || x == w-1 || y == h-1)
+                {
+                    SDL_Rect rect = recttoscreen(cam,
+                                                 x*mapsquaresize - mapsquaresize/2.0,
+                                                 y*mapsquaresize - mapsquaresize/2.0,
+                                                 mapsquaresize,
+                                                 mapsquaresize,
+                                                 space_game);
+                    SDL_RenderFillRect(cam.renderer,
+                                       &rect);
+                }
+                else if(!map[x][y+1])
+                {
+                    SDL_Rect rect = recttoscreen(cam,
+                                                 x*mapsquaresize - mapsquaresize/2.0,
+                                                 y*mapsquaresize - mapsquaresize/2.0,
+                                                 mapsquaresize,
+                                                 mapsquaresize,
+                                                 space_game);
+                    SDL_RenderFillRect(cam.renderer,
+                                       &rect);
+                    SDL_SetRenderDrawColor(cam.renderer,
+                                           50,
+                                           50,
+                                           50,
+                                           255);
+                    rect = recttoscreen(cam,
+                                        x*mapsquaresize - mapsquaresize/2.0,
+                                        (y*mapsquaresize + mapsquaresize*0.7 - mapsquaresize/2.0),
+                                        mapsquaresize,
+                                        mapsquaresize * 0.3,
+                                        space_game);
+                    SDL_RenderFillRect(cam.renderer,
+                                       &rect);
+                }
+                else
+                {
+                    SDL_Rect rect = recttoscreen(cam,
+                                                 x*mapsquaresize - mapsquaresize/2.0,
+                                                 y*mapsquaresize - mapsquaresize/2.0,
+                                                 mapsquaresize,
+                                                 mapsquaresize,
+                                                 space_game);
+                    SDL_RenderFillRect(cam.renderer,
+                                       &rect);
+                }
 
-                SDL_RenderFillRect(cam.renderer,
-                                   &rect);
             }
         }
     }

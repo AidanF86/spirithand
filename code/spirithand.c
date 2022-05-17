@@ -100,7 +100,7 @@ Spirit {
     double velx; double vely;
     double size;
     double mapx; double mapy;
-    double mapdestx; double mapdesty;
+    int mapdestx; int mapdesty;
     double movespeed;
     enum directions dir;
     double timebetweenparticles;
@@ -219,7 +219,7 @@ makespirit(double mapx, double mapy, double size, SDL_Color color)
     newspirit.x = mapx * mapsquaresize;
     newspirit.y = mapy * mapsquaresize;
     newspirit.movespeed = 1.5;
-    printf("makespirit: newspirit.x: %d, newspirit.y: %d\n", (int)newspirit.x, (int)newspirit.y);
+    //printf("makespirit: newspirit.x: %d, newspirit.y: %d\n", (int)newspirit.x, (int)newspirit.y);
     newspirit.size = size;
     newspirit.state = state_free;
     newspirit.color = color;
@@ -293,7 +293,7 @@ checknextpos(bool **map, double x, double y, enum directions dir)
 }
 
 Vectorf
-getnewdest(bool **map, double x, double y, enum directions currentdir)
+getnewdest(bool **map, double x, double y, double pairx, double pairy)
 {
     int xi = roundtoint(x);
     int yi = roundtoint(y);
@@ -315,7 +315,26 @@ getnewdest(bool **map, double x, double y, enum directions currentdir)
     {
         possibledests[possibledestscount++] = newvectorf(xi+1, yi);
     }
-    return possibledests[randint(0, possibledestscount+1)];
+    if(possibledestscount == 0)
+    {
+        printf("no possible destinations!\n");
+        return newvectorf(xi, yi);
+    }
+
+    double smallestdist = fabs(dist(possibledests[0].x, possibledests[0].y, pairx, pairy));
+    int smallestdistindex = 0;
+    for(int i = 0; i < possibledestscount; i++)
+    {
+        double thisdist = fabs(dist(possibledests[i].x, possibledests[i].y, pairx, pairy));
+        if(thisdist > smallestdist)
+        {
+            smallestdist = thisdist;
+            smallestdistindex = i;
+        }
+    }
+
+    //return possibledests[smallestdistindex];
+    return possibledests[randint(0, possibledestscount)];
 }
 
 Spirit
@@ -327,7 +346,7 @@ updatespiritposition(Spirit spirit, bool **map)
         if(fabs(spirit.mapdestx - spirit.mapx) < 0.1 && 
            fabs(spirit.mapdesty - spirit.mapy) < 0.1)
         {
-            Vectorf newdest = getnewdest(map, spirit.mapx, spirit.mapy, spirit.dir);
+            Vectorf newdest = getnewdest(map, spirit.mapx, spirit.mapy, spirit.pair->x, spirit.pair->x);
             spirit.mapdestx = newdest.x;
             spirit.mapdestx = newdest.x;
         }
@@ -541,7 +560,7 @@ render(Camera cam)
                            color_grass_green.b,
                            color_grass_green.a);
     SDL_RenderClear(cam.renderer);
-        // draw background canvas (to make sure of the size)
+    // draw background canvas (to make sure of the size)
     //SDL_Rect canvasrect = rectgametoscreen(cam,
     //                                    -cam.w / 2 + cam.x,
     //                                    -cam.h / 2 + cam.y,
@@ -707,7 +726,6 @@ updatespiritgrabbing()
         {
             if(keysup.z)
             {
-                printf("throwing spirit!\n");
                 // throw spirit
                 selectedspirit->state = state_thrown;
                 selectedspirit->velx = playervelx*2;
@@ -993,6 +1011,40 @@ int main()
 {
     srand(time(0));
 
+    // randint test
+    /*
+    int randomints[500];
+    for(int i = 0; i < 500; i++)
+    {
+        // random int 0-4
+        randomints[i] = randint(0, 3);
+    }
+    int count0 = 0;
+    int count1 = 0;
+    int count2 = 0;
+    int count3 = 0;
+    int count4 = 0;
+    for(int i = 0; i < 500; i++)
+    {
+        if(randomints[i] == 0)
+            count0++;
+        else if(randomints[i] == 1)
+            count1++;
+        else if(randomints[i] == 2)
+            count2++;
+        else if(randomints[i] == 3)
+            count3++;
+        else if(randomints[i] == 4)
+            count4++;
+    }
+    printf("counts:\n 0:%d\n 1:%d\n 2:%d\n 3:%d\n 4:%d\n",
+           count0,
+           count1,
+           count2,
+           count3,
+           count4);
+    */
+
     initcolors();
     loadfonts();
 
@@ -1015,6 +1067,19 @@ int main()
     maph = 10;
     mapsquaresize = 20;
     mainmap = (bool**)malloc(mapw*sizeof(bool*));
+    /*
+    mainmap = {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+               {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+               {1, 0, 1, 0, 1, 1, 0, 1, 0, 1},
+               {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
+               {1, 0, 0, 0, 1, 1, 0, 0, 0, 1},
+               {1, 0, 0, 0, 1, 1, 0, 0, 0, 1},
+               {1, 0, 1, 0, 0, 0, 0, 1, 0, 1},
+               {1, 0, 1, 0, 1, 1, 0, 1, 0, 1},
+               {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+               {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+               */
+    
     for(int i = 0; i < mapw; i++)
     {
         mainmap[i] = (bool*)malloc(maph*sizeof(bool));
@@ -1027,6 +1092,7 @@ int main()
             }
         }
     }
+    
 
     maincam.x = (mapw-1)*mapsquaresize/2;
     maincam.y = (maph-1)*mapsquaresize/2;
@@ -1101,7 +1167,7 @@ int main()
             spirittrailparticle.color = color_white;
             spirittrailparticle.anim = particle1anim;
 
-            for(int i = 0; i < 3; i++)
+            for(int i = 0; i < 1; i++)
             {
                 Vectori pos1= getemptymapspace(mainmap);
                 Vectori pos2= getemptymapspace(mainmap);
